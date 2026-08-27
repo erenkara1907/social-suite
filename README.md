@@ -1,7 +1,7 @@
 # Social Suite
 
 `sahne` · `siraya` · `threadly` birleşimi. Tek yetkili kaynak:
-[`../BIRLESIM_PLANI.md`](../BIRLESIM_PLANI.md).
+[`docs/BIRLESIM_PLANI.md`](docs/BIRLESIM_PLANI.md).
 
 ## Kurulum
 
@@ -36,9 +36,33 @@ gevşetmiyor. **Lockfile bir kez oluştuktan sonra** düz `npm install` ve
 
 ### Node sürümü
 
-`next@16.3.3`, Node `^22.22.2 || ^24.15.0 || >=26.0.0` istiyor. Aradaki
-sürümlerde (ör. v23.x) `npm` EBADENGINE uyarısı verir; build/tsc/lint çalışır
-ama CI ve Vercel Node sürümü bu aralığa sabitlenmelidir.
+**Sabitlenen sürüm: Node 22.** İki yerde yazılı:
+
+| Yer | Değer | Ne yapar |
+|---|---|---|
+| `package.json` → `engines.node` | `>=22.22.2 <23` | `npm` uyumsuz sürümde EBADENGINE uyarır |
+| `.nvmrc` | `22.22.2` | `nvm use` / `fnm use` doğru sürüme geçer |
+
+`next@16.3.3` aslında `^22.22.2 || ^24.15.0 || >=26.0.0` kabul ediyor; biz
+bilerek 22'ye daraltıyoruz — tek bir sürüm hattı, üç ortamda (yerel, CI,
+Vercel) aynı davranış demek.
+
+#### ⚠ `engines` tek başına Vercel'i BAĞLAMAZ
+
+Vercel, Node sürümünü **proje ayarından** okur (Settings → General → Node.js
+Version), `package.json`'ın `engines` alanından değil. `engines` orada yalnızca
+bir doğrulama katmanı: proje ayarı `engines` aralığıyla çelişirse build hata
+verir, ama ayarın kendisini değiştirmez.
+
+**Yapılacak:** Vercel projesi oluşturulduğunda Node.js Version → **22.x**
+seçilmeli. CI (GitHub Actions vb.) tarafında `actions/setup-node` zaten
+`.nvmrc`'yi `node-version-file` ile okuyabilir.
+
+#### Yerel durum
+
+Bu makine şu an **v23.10.0** çalıştırıyor — aralığın dışında. `npm install`
+EBADENGINE uyarısı verir; `build` / `tsc` / `lint` / `test` dördü de çalışır
+(bu oturumda dördü de yeşil ölçüldü). Kalıcı çözüm `nvm install 22.22.2`.
 
 ## Komutlar
 

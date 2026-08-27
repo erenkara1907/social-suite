@@ -57,7 +57,7 @@ Bu raporun geri kalanı bu gerçeğin üzerine kurulu.
 
 | Enum | siraya | threadly | KARAR | Gerekçe |
 |---|---|---|---|---|
-| `platform` | gerçek enum: `instagram\|x\|linkedin\|tiktok` (`schema.sql:12`) | `text CHECK`: `X\|LinkedIn\|Instagram` (`0001:31`) | **`text` + `CHECK`, değerler küçük harf** | Aşağıda |
+| `platform` | gerçek enum: `instagram\|x\|linkedin\|tiktok` (`schema.sql:12`) | `text CHECK`: `X\|LinkedIn\|Instagram` (`0001:31`) | **`text` + `CHECK`, 5 değer, küçük harf**: `instagram\|x\|linkedin\|tiktok\|youtube` | Aşağıda |
 | `post_status` | gerçek enum, 5 değer (`schema.sql:16`) | `text CHECK`, 4 değer (`0001:41`) | **`text` + `CHECK`, 8 değer** | Aynı |
 | `activity_action` | gerçek enum, 5 değer (`schema.sql:20`) | — | **`text` + `CHECK`, 12 değer** | Aynı |
 
@@ -70,10 +70,26 @@ Bu raporun geri kalanı bu gerçeğin üzerine kurulu.
   constraint` + `add constraint` ile transaction'da değişir. threadly bunu zaten
   yapıyor (`0002_brands.sql:48-51`).
 
-**B seçildi.** Bu üründe üç liste de sık değişecek: `platform`'a youtube/tiktok
-yayıncısı eklenecek (§8.8), `post_status`'a `publishing` ve `archived` eklendi
-(§4a), `activity_action`'a 7 yeni eylem geldi. Enum bu değişimin her birinde
-maliyet çıkarır, CHECK çıkarmaz. TypeScript union tarafı iki seçenekte de aynı.
+**B seçildi.** Bu üründe üç liste de sık değişecek: `platform`'un CHECK listesi
+siraya'nın dört değerinden **beşe** çıktı (`youtube` eklendi), `post_status`'a
+`publishing` ve `archived` eklendi (§4a), `activity_action`'a 7 yeni eylem geldi.
+Enum bu değişimin her birinde maliyet çıkarır, CHECK çıkarmaz. TypeScript union
+tarafı iki seçenekte de aynı.
+
+**⚠ Düzeltme (B4).** Bu paragrafın önceki hâli *"`platform`'a youtube/tiktok
+yayıncısı eklenecek (§8.8)"* diyordu ve §1.2'nin platform listesi dört değer
+okunuyordu. Şema beş değer tanımlıyor (`00_schema.sql:219-220` ve `:369-370`,
+iki tabloda da `('instagram', 'x', 'linkedin', 'tiktok', 'youtube')`) ve
+`lib/core/types.ts`'in `PLATFORMS` union'ı şemaya göre yazıldı. **Şema
+doğrudur**; §1.2 metni ona hizalandı.
+
+Ayrım önemli: §8.8'in eklediği şey bir **enum değeri değil, bir yayıncı
+implementasyonudur**. `tiktok` ve `youtube` bugün de geçerli `platform`
+değerleri — içerik onlar için planlanabilir ve taslak yazılabilir. Yayınlanıp
+yayınlanamayacağını `lib/core/publishing.ts`'in ayrı listesi söylüyor
+(`PUBLISHABLE_PLATFORMS = ["instagram"]`). §8.8 genişleyen liste **odur**,
+CHECK değil. İki listenin ayrı olması bilinçli: "planlanabilir" ile
+"yayınlanabilir" farklı sorulardır.
 
 **Ayrıca: platform değerleri küçük harfe normalize edilir.** threadly'nin
 `'X' | 'LinkedIn' | 'Instagram'` PascalCase değerleri DB'de görünen etiket gibi
@@ -1217,20 +1233,20 @@ Değişiklik kolonu: **OLDUĞU GİBİ** / **KÜÇÜK UYARLAMA** / **YENİDEN YAZ
 | `threadly/lib/plan/skeleton.ts` | `lib/core/plan/skeleton.ts` | 1 | **KÜÇÜK UYARLAMA** | Kanal enum'ları küçük harfe; `lib/demo/data` tip importu `lib/core/types`'a |
 | `threadly/lib/plan/template.ts` | `lib/core/plan/template.ts` | 1 | **OLDUĞU GİBİ** | Sıfır runtime bağımlılığı |
 | `threadly/lib/plan/types.ts` | `lib/core/plan/types.ts` | 1 | **KÜÇÜK UYARLAMA** | `toPlanPost` → `toContentItem`; yeni kolonlar |
-| `threadly/lib/ai/caption.ts` | `lib/core/caption/caption.ts` | 1 | **KÜÇÜK UYARLAMA** | Kanal enum'u; zincir bağlamı parametresi eklenir |
+| `threadly/lib/ai/caption.ts` | `lib/core/ai/caption.ts` | 1 | **KÜÇÜK UYARLAMA** | Kanal enum'u; zincir bağlamı parametresi eklenir |
 | `threadly/lib/brand/types.ts` | `lib/core/brand/types.ts` | 1 | **OLDUĞU GİBİ** | `toPromptBlock()` üç modülün ortak marka kaynağı |
-| `threadly/lib/ai/types.ts` | `lib/core/contracts.ts` | 1 | **KÜÇÜK UYARLAMA** | `ApiErrorCode`'a `rate_limited`, `duplicate`, `publish_failed` eklenir |
-| `threadly/lib/ai/client.ts` | `lib/core/contracts-client.ts` | 1 | **KÜÇÜK UYARLAMA** | Yeni hata kodlarının TR/EN metinleri |
-| `sahne/lib/server/kie.ts` | `lib/providers/kie.ts` | 1 | **KÜÇÜK UYARLAMA** | `uploadPath:"sahne"` → yeni marka; apiKey parametreye (env'den değil, §8.6) |
-| `sahne/lib/server/elevenlabs.ts` | `lib/providers/elevenlabs.ts` | 1 | **KÜÇÜK UYARLAMA** | Aynı: apiKey parametreye |
-| `sahne/lib/server/fal.ts` | `lib/providers/fal.ts` | 1 | **KÜÇÜK UYARLAMA** | `fal.config()` import-time singleton'ı → istek başına client (§8.6) |
-| `sahne/lib/server/prompt.ts` | `lib/core/caption/prompt.ts` | 2 | **OLDUĞU GİBİ** | 15 satır |
+| `threadly/lib/ai/types.ts` | `lib/core/ai/types.ts` | 1 | **KÜÇÜK UYARLAMA** | `ApiErrorCode`'a `rate_limited`, `duplicate`, `publish_failed` eklenir |
+| `threadly/lib/ai/client.ts` | `lib/core/ai/client.ts` | 1 | **KÜÇÜK UYARLAMA** | Yeni hata kodlarının TR/EN metinleri |
+| `sahne/lib/server/kie.ts` | `lib/core/providers/kie.ts` | 1 | **KÜÇÜK UYARLAMA** | `uploadPath:"sahne"` → yeni marka; apiKey parametreye (env'den değil, §8.6) |
+| `sahne/lib/server/elevenlabs.ts` | `lib/core/providers/elevenlabs.ts` | 1 | **KÜÇÜK UYARLAMA** | Aynı: apiKey parametreye |
+| `sahne/lib/server/fal.ts` | `lib/core/providers/fal.ts` | 1 | **KÜÇÜK UYARLAMA** | `fal.config()` import-time singleton'ı → istek başına client (§8.6) |
+| `sahne/lib/server/prompt.ts` | `lib/core/ai/prompt.ts` | 2 | **OLDUĞU GİBİ** | 15 satır |
 | `sahne/lib/server/personas.ts` | `lib/server/storage.ts` | 1 | **YENİDEN YAZILACAK** | Arayüz korunur, gövde Storage+DB olur. Güvenlik kontrolleri (id regex, https, 25MB) taşınır |
-| `sahne/lib/server/audio.ts` | `lib/providers/audio.ts` | 3 | **KÜÇÜK UYARLAMA** | §10'daki ffmpeg kararına bağlı |
-| `siraya/lib/instagram/{config,oauth,publish,tokens}.ts` | `lib/providers/instagram/*` | 1 | **KÜÇÜK UYARLAMA** | D2: `config.ts` `process.env` okumayı bırakır, `InstagramAppConfig` parametresi alır (`resolveInstagramConfig(brandId)` → `provider_credentials`, yoksa env fallback). `oauth/publish/tokens` bu nesneyi parametre olarak geçer |
-| `siraya/lib/data/tz.ts` | `lib/core/calendar/tz.ts` | 1 | **OLDUĞU GİBİ** | Saf TS, sıfır bağımlılık |
-| `siraya/lib/data/derive-calendar.ts` | `lib/core/calendar/derive-calendar.ts` | 2 | **KÜÇÜK UYARLAMA** | Tip importu `lib/demo/data`'dan koparılır |
-| `siraya/lib/data/derive-analytics.ts` | `lib/core/calendar/derive-analytics.ts` | 2 | **KÜÇÜK UYARLAMA** | Aynı; `MetricRow` yeni kolonlarla |
+| `sahne/lib/server/audio.ts` | `lib/core/providers/audio.ts` | 3 | **KÜÇÜK UYARLAMA** | §10'daki ffmpeg kararına bağlı |
+| `siraya/lib/instagram/{config,oauth,publish,tokens}.ts` | `lib/core/providers/instagram/*` | 1 | **KÜÇÜK UYARLAMA** | D2: `config.ts` `process.env` okumayı bırakır, `InstagramAppConfig` parametresi alır (`resolveInstagramConfig(brandId)` → `provider_credentials`, yoksa env fallback). `oauth/publish/tokens` bu nesneyi parametre olarak geçer |
+| `siraya/lib/data/tz.ts` | `lib/core/tz.ts` | 1 | **OLDUĞU GİBİ** | Saf TS, sıfır bağımlılık |
+| `siraya/lib/data/derive-calendar.ts` | `lib/core/derive/calendar.ts` | 2 | **KÜÇÜK UYARLAMA** | Tip importu `lib/demo/data`'dan koparılır |
+| `siraya/lib/data/derive-analytics.ts` | `lib/core/derive/analytics.ts` | 2 | **KÜÇÜK UYARLAMA** | Aynı; `MetricRow` yeni kolonlarla |
 | `siraya/lib/data/types.ts` | `lib/core/types.ts` | 2 | **KÜÇÜK UYARLAMA** | `lib/demo/data` tip bağımlılığı koparılır |
 | `siraya/lib/publishing.ts` | `lib/core/publishing.ts` | 2 | **OLDUĞU GİBİ** | 15 satır; genişletme noktası (§8.8) |
 | `siraya/lib/actions/posts.ts` | `lib/server/actions/content.ts` | 1 | **KÜÇÜK UYARLAMA** | `readPostForm()` doğrulaması birebir; tablo adı + `brand_id` |
@@ -1238,6 +1254,26 @@ Değişiklik kolonu: **OLDUĞU GİBİ** / **KÜÇÜK UYARLAMA** / **YENİDEN YAZ
 | `siraya/lib/data/{index,queries}.ts` | `lib/adapters/*` | 1 | **YENİDEN YAZILACAK** | Desen korunur, açık bayrağa çevrilir (§9) |
 | `siraya/lib/supabase/{client,server,admin,config}.ts` | `lib/server/supabase/*` | 1 | **OLDUĞU GİBİ** | Dördü de doğrudan çalışır |
 | `siraya/lib/supabase/auth-errors.ts` | `lib/server/supabase/auth-errors.ts` | 2 | **OLDUĞU GİBİ** | TR/EN hata eşlemesi |
+
+**⚠ Hizalama notu (B4) — bu tablonun hedef yolları adım 4'te uygulanan
+gerçek yollarla güncellendi.** Önceki hâli beş yerde diskteki ağaçtan
+ayrışıyordu ve plan artık var olmayan yolları gösteriyordu:
+
+| Planın eski yolu | Gerçek yol | Neden |
+|---|---|---|
+| `lib/core/calendar/tz.ts` | `lib/core/tz.ts` | `tz.ts` takvime özel değil; saat dilimi yardımcıları planlayıcı, kuyruk ve analitik tarafından da okunuyor |
+| `lib/core/calendar/derive-{calendar,analytics}.ts` | `lib/core/derive/{calendar,analytics}.ts` | İki dosya da "satırdan görünüm türet" işi yapıyor; ortak olan `derive`, `calendar` değil. `derive-` ön eki dizin adında tekrarlanıyordu |
+| `lib/core/caption/caption.ts` · `lib/core/contracts.ts` · `contracts-client.ts` | `lib/core/ai/{caption,types,client}.ts` | `caption/caption.ts` tekrar; üç dosya da aynı AI sözleşmesinin parçası, tek dizinde |
+| `lib/providers/*` | `lib/core/providers/*` | Sağlayıcı sarmalayıcıları adım 4'te saflaştırıldı (`process.env` → `apiKey` parametresi). Saf oldukları için `lib/core/`'un saflık grep'i onları da kapsıyor; `lib/core/` dışında olsalardı bu kapı onları denetlemezdi |
+
+`lib/providers/README.md` ve `lib/server/README.md` yerinde duruyor —
+`lib/providers/` FAZ 2'de saf olmayan sağlayıcı kodu doğarsa (ör. Instagram
+OAuth'un yönlendirme akışı) hâlâ hedef dizin.
+
+**Henüz taşınmamış satırlar** (bu tablo taşıma haritası, tamamlanma raporu
+değil): `client.ts`, `prompt.ts`, `audio.ts`, `personas.ts`, `instagram/*`,
+`actions/*`, `supabase/*` ve `data/{index,queries}.ts`. Sonuncusu adım 5'in
+konusu (§9.1 adapter deseni).
 
 ### 7.2 API rotaları
 
@@ -1992,3 +2028,72 @@ Kayıt için: aşağıdaki kararlara dokunulmadı ve hâlâ geçerli.
 - §5 "RLS açık + SIFIR politika" deseni (`channel_credentials`,
   `provider_credentials`, `rate_limit_counters`)
 - §9.1 port başına mod bayrağı, sunucuda çözülür, varsayılan `demo`
+
+---
+
+**Revizyon 3 — 2026-08-27 · Adım 5/6 oturumu, FAZ B (B4)**
+
+İki düzeltme. İkisi de yeni karar getirmiyor; planın metnini **diskteki
+gerçeğe** ve **şemaya** hizalıyor. Plan yetkili kaynaksa, gerçekle ayrışan
+her satırı bir sonraki oturum sessizce yanlış uygular.
+
+| # | Ne | Değişen bölümler |
+|---|---|---|
+| **D7** | §7.1'in hedef yol tablosu adım 4'te uygulanan gerçek yollarla güncellendi (5 grup, 12 satır) | §7.1 |
+| **D8** | §1.2 metni 4 platform okunuyordu; şema 5 tanımlıyor (`youtube` dahil). Şema doğru, metin düzeltildi | §1.2 |
+
+### D7 — §7.1 yol tablosu gerçekle ayrışmıştı
+
+**Sorun:** adım 4 dosyaları taşırken beş yerde §7.1'in önerdiği yoldan saptı
+(ADIM_34_RAPOR.md "VARSAYIM YAPTIĞIM HER NOKTA" 1. madde bunu kaydetmiş, ama
+planı güncellememişti). Sonuç: plan `lib/core/calendar/tz.ts` diyordu, diskte
+`lib/core/tz.ts` vardı. Bir sonraki oturumun bu tabloya bakıp var olmayan bir
+yola dosya yazması an meselesiydi.
+
+**Düzeltme:** tablo gerçeğe göre yeniden yazıldı ve altına gerekçeli bir
+karşılaştırma eklendi. Değişen beş grup:
+
+| Planın eski yolu | Gerçek yol |
+|---|---|
+| `lib/core/calendar/tz.ts` | `lib/core/tz.ts` |
+| `lib/core/calendar/derive-{calendar,analytics}.ts` | `lib/core/derive/{calendar,analytics}.ts` |
+| `lib/core/caption/caption.ts`, `lib/core/contracts{,-client}.ts` | `lib/core/ai/{caption,types,client}.ts` |
+| `lib/core/caption/prompt.ts` | `lib/core/ai/prompt.ts` |
+| `lib/providers/{kie,elevenlabs,fal,audio,instagram/*}` | `lib/core/providers/*` |
+
+Sonuncusu yalnızca bir isim tercihi değil: sağlayıcı sarmalayıcıları adım 4'te
+`process.env` okumayı bıraktığı için **saf**lar, ve `lib/core/` altında
+oldukları için §12 adım 4'ün saflık grep'i onları da denetliyor. `lib/providers/`
+dizini ve README'si duruyor — FAZ 2'de saf olmayan sağlayıcı kodu (ör. Instagram
+OAuth yönlendirmesi) doğarsa hedefi orası.
+
+### D8 — §1.2 dört platform diyordu, şema beş tanımlıyor
+
+**Sorun:** §1.2'nin gerekçe paragrafı *"`platform`'a youtube/tiktok yayıncısı
+eklenecek (§8.8)"* diyordu; bu cümle platform listesini dört değer olarak
+okutuyordu. Şema ise iki tabloda da beş değer yazıyor
+(`00_schema.sql:219-220`, `:369-370`).
+
+**Hangisi doğru: şema.** `lib/core/types.ts`'in `PLATFORMS` union'ı adım 4'te
+zaten şemaya göre yazılmıştı (ADIM_34_RAPOR.md "ENUM KÜÇÜK HARF DÖNÜŞÜMÜ"
+4. madde). TS union'ı ile CHECK listesi ayrışsaydı sonuç sessiz bir
+`constraint violation` olurdu — kod tarafı geçerli sayardı, DB reddederdi.
+
+**Düzeltme:** §1.2 tablosunun KARAR hücresi beş değeri açıkça sayıyor, gerekçe
+paragrafı düzeltildi. Ayrıca metin artık iki listeyi ayırıyor:
+
+- **`platform` CHECK listesi (5)** — bir içeriğin hangi platform için
+  *planlanabileceği*. `tiktok` ve `youtube` bugün de geçerli.
+- **`PUBLISHABLE_PLATFORMS` (1)** — hangisine *yayın yapılabileceği*.
+  `lib/core/publishing.ts`, bugün yalnızca `instagram`.
+
+§8.8'in genişlettiği liste **ikincisidir**, CHECK değil.
+
+### Bu revizyonda DEĞİŞMEYENLER
+
+- D1-D6'nın tamamı geçerli.
+- §9.1 adapter deseni ve port listesi — adım 5 bu oturumda onu **uyguluyor**,
+  değiştirmiyor.
+- §12 adım sıraları ve numaralandırma.
+- §4c eşikleri, §11 S3'ün "⚠ DOĞRULANMALI · §12 adım 15'ten önce" notu
+  (üç yerde de yerinde: §4c, §11 S3, REVİZYON D3).

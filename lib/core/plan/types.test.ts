@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   PLAN_HORIZONS, PLAN_MODES,
-  toPlan, toPlanPost, type PlanPostRow, type PlanRow,
+  toPlan, toPlanPost, toPlanPosts,
+  DEFAULT_PLAN_CHANNEL, DEFAULT_PLAN_KIND, DEFAULT_PLAN_POST_STATUS,
+  type PlanPostRow, type PlanRow,
 } from "@/lib/core/plan/types";
 import { PLAN_CHANNELS, POST_KINDS } from "@/lib/core/types";
 
@@ -85,7 +87,7 @@ describe("toPlan", () => {
 
 describe("toPlanPost", () => {
   it("snake_case satırı camelCase modele çevirir", () => {
-    expect(toPlanPost(POST_ROW)).toEqual({
+    expect(toPlanPost(POST_ROW).post).toEqual({
       id: "pp1", dayOffset: 0, timeOfDay: "09:00", channel: "instagram",
       kind: "image", title: "Sabah demlemesi", hook: "Saat 7'de kapı açılır.",
       body: null, hashtags: null, status: "idea",
@@ -93,7 +95,7 @@ describe("toPlanPost", () => {
   });
 
   it("null gövde ve hashtag'i null bırakır", () => {
-    const post = toPlanPost({ ...POST_ROW, body: null, hashtags: null });
+    const post = toPlanPost({ ...POST_ROW, body: null, hashtags: null }).post;
     expect(post.body).toBeNull();
     expect(post.hashtags).toBeNull();
   });
@@ -101,32 +103,32 @@ describe("toPlanPost", () => {
   describe("⭐ kanal doğrulaması — §1.2 küçük harf göçünün kırılma noktası", () => {
     it("küçük harf kanalları geçirir", () => {
       for (const channel of PLAN_CHANNELS) {
-        expect(toPlanPost({ ...POST_ROW, channel }).channel).toBe(channel);
+        expect(toPlanPost({ ...POST_ROW, channel }).post.channel).toBe(channel);
       }
     });
 
     it("⭐ göç etmemiş PascalCase satırı küçük harfe normalize eder", () => {
       // threadly'nin eski verisi 'Instagram' / 'LinkedIn' / 'X' yazıyordu.
       // Kaynaktaki kör `as Channel` cast'i bunu tipe uyuyormuş gibi geçirirdi.
-      expect(toPlanPost({ ...POST_ROW, channel: "Instagram" }).channel).toBe("instagram");
-      expect(toPlanPost({ ...POST_ROW, channel: "LinkedIn" }).channel).toBe("linkedin");
-      expect(toPlanPost({ ...POST_ROW, channel: "X" }).channel).toBe("x");
+      expect(toPlanPost({ ...POST_ROW, channel: "Instagram" }).post.channel).toBe("instagram");
+      expect(toPlanPost({ ...POST_ROW, channel: "LinkedIn" }).post.channel).toBe("linkedin");
+      expect(toPlanPost({ ...POST_ROW, channel: "X" }).post.channel).toBe("x");
     });
 
     it("boşluklu değeri de toparlar", () => {
-      expect(toPlanPost({ ...POST_ROW, channel: "  Instagram  " }).channel).toBe("instagram");
+      expect(toPlanPost({ ...POST_ROW, channel: "  Instagram  " }).post.channel).toBe("instagram");
     });
 
     it("planlayıcının yazmadığı platformu varsayılana düşürür", () => {
       // tiktok/youtube geçerli Platform ama PLAN_CHANNELS'ta değil (§8.8).
-      expect(toPlanPost({ ...POST_ROW, channel: "tiktok" }).channel).toBe("instagram");
-      expect(toPlanPost({ ...POST_ROW, channel: "çöp" }).channel).toBe("instagram");
-      expect(toPlanPost({ ...POST_ROW, channel: "" }).channel).toBe("instagram");
+      expect(toPlanPost({ ...POST_ROW, channel: "tiktok" }).post.channel).toBe("instagram");
+      expect(toPlanPost({ ...POST_ROW, channel: "çöp" }).post.channel).toBe("instagram");
+      expect(toPlanPost({ ...POST_ROW, channel: "" }).post.channel).toBe("instagram");
     });
 
     it("sonuç her zaman geçerli bir plan kanalı", () => {
       for (const raw of ["instagram", "Instagram", "tiktok", "", "çöp"]) {
-        expect(PLAN_CHANNELS).toContain(toPlanPost({ ...POST_ROW, channel: raw }).channel);
+        expect(PLAN_CHANNELS).toContain(toPlanPost({ ...POST_ROW, channel: raw }).post.channel);
       }
     });
   });
@@ -134,12 +136,12 @@ describe("toPlanPost", () => {
   describe("biçim doğrulaması", () => {
     it("bilinen biçimleri geçirir", () => {
       for (const kind of POST_KINDS) {
-        expect(toPlanPost({ ...POST_ROW, kind }).kind).toBe(kind);
+        expect(toPlanPost({ ...POST_ROW, kind }).post.kind).toBe(kind);
       }
     });
     it("bilinmeyen biçimi 'text'e düşürür", () => {
       for (const raw of ["gif", "", "Image", "çöp"]) {
-        expect(toPlanPost({ ...POST_ROW, kind: raw }).kind).toBe("text");
+        expect(toPlanPost({ ...POST_ROW, kind: raw }).post.kind).toBe("text");
       }
     });
   });
@@ -147,24 +149,97 @@ describe("toPlanPost", () => {
   describe("durum doğrulaması", () => {
     it("plan durumlarını geçirir", () => {
       for (const status of ["idea", "draft", "scheduled", "published"] as const) {
-        expect(toPlanPost({ ...POST_ROW, status }).status).toBe(status);
+        expect(toPlanPost({ ...POST_ROW, status }).post.status).toBe(status);
       }
     });
     it("⭐ plan dışı durumu 'idea'ya düşürür", () => {
       // 'failed'/'archived' içerik tablosunda geçerli ama PLAN durumu değil.
       for (const raw of ["failed", "archived", "publishing", "", "çöp"]) {
-        expect(toPlanPost({ ...POST_ROW, status: raw }).status).toBe("idea");
+        expect(toPlanPost({ ...POST_ROW, status: raw }).post.status).toBe("idea");
       }
     });
   });
 
   it("dayOffset'i olduğu gibi taşır", () => {
-    expect(toPlanPost({ ...POST_ROW, day_offset: 29 }).dayOffset).toBe(29);
+    expect(toPlanPost({ ...POST_ROW, day_offset: 29 }).post.dayOffset).toBe(29);
   });
 
   it("girdi satırını değiştirmez", () => {
     const row = { ...POST_ROW, channel: "Instagram" };
     toPlanPost(row);
     expect(row.channel).toBe("Instagram");
+  });
+});
+
+describe("⭐ B3 — tanınmayan değerler sayılabilir", () => {
+  it("temiz satır sıfır fallback üretir", () => {
+    expect(toPlanPost(POST_ROW).fallbacks).toEqual([]);
+  });
+
+  it("PascalCase normalizasyonu fallback DEĞİLDİR — değer tanındı, sadece biçimi düzeltildi", () => {
+    const read = toPlanPost({ ...POST_ROW, channel: "Instagram" });
+    expect(read.post.channel).toBe("instagram");
+    expect(read.fallbacks).toEqual([]);
+  });
+
+  it("tanınmayan kanal, ham değeriyle birlikte rapor edilir", () => {
+    expect(toPlanPost({ ...POST_ROW, channel: "tiktok" }).fallbacks).toEqual([
+      { field: "channel", received: "tiktok", used: DEFAULT_PLAN_CHANNEL },
+    ]);
+  });
+
+  it("tanınmayan biçim rapor edilir", () => {
+    expect(toPlanPost({ ...POST_ROW, kind: "gif" }).fallbacks).toEqual([
+      { field: "kind", received: "gif", used: DEFAULT_PLAN_KIND },
+    ]);
+  });
+
+  it("tanınmayan durum rapor edilir", () => {
+    expect(toPlanPost({ ...POST_ROW, status: "archived" }).fallbacks).toEqual([
+      { field: "status", received: "archived", used: DEFAULT_PLAN_POST_STATUS },
+    ]);
+  });
+
+  it("tek satırda üç alan birden düşerse üçü de rapor edilir", () => {
+    const read = toPlanPost({ ...POST_ROW, channel: "çöp", kind: "çöp", status: "çöp" });
+    expect(read.fallbacks).toHaveLength(3);
+    expect(read.fallbacks.map((f) => f.field)).toEqual(["channel", "kind", "status"]);
+  });
+
+  it("⭐ 3 bozuk satır → sayaç 3 (§B3 kabul kriteri)", () => {
+    // Bozuk bir göçün imzası: her satırda TEK bir tanınmayan kanal.
+    const rows: PlanPostRow[] = [
+      { ...POST_ROW, id: "a", channel: "tiktok" },
+      { ...POST_ROW, id: "b", channel: "youtube" },
+      { ...POST_ROW, id: "c", channel: "threads" },
+    ];
+
+    const { posts, fallbacks } = toPlanPosts(rows);
+
+    expect(fallbacks).toHaveLength(3);
+    expect(fallbacks.map((f) => f.received)).toEqual(["tiktok", "youtube", "threads"]);
+    // Satır ATILMADI — plan hâlâ üç gönderi gösteriyor.
+    expect(posts).toHaveLength(3);
+    expect(posts.every((p) => p.channel === DEFAULT_PLAN_CHANNEL)).toBe(true);
+  });
+
+  it("temiz satırlar arasındaki tek bozuk satır sayaçta 1 verir", () => {
+    const rows: PlanPostRow[] = [
+      POST_ROW,
+      { ...POST_ROW, id: "b", channel: "tiktok" },
+      { ...POST_ROW, id: "c", channel: "linkedin" },
+    ];
+    expect(toPlanPosts(rows).fallbacks).toHaveLength(1);
+  });
+
+  it("boş satır kümesi sıfır fallback ve sıfır gönderi verir", () => {
+    expect(toPlanPosts([])).toEqual({ posts: [], fallbacks: [] });
+  });
+
+  it("girdi satırlarını değiştirmez", () => {
+    const rows: PlanPostRow[] = [{ ...POST_ROW, channel: "tiktok" }];
+    const snapshot = JSON.stringify(rows);
+    toPlanPosts(rows);
+    expect(JSON.stringify(rows)).toBe(snapshot);
   });
 });

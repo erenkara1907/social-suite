@@ -3,6 +3,28 @@
  * Uyarlama: tip importları `lib/core/types`'a bağlandı; WEEKLY_TEMPLATE'in
  * kanal değerleri §1.2 gereği küçük harfe çevrildi (davranış aynı).
  *
+ * ⚠ SAPMA — `parseIsoDate` artık yıl aralığını doğruluyor (B5).
+ *
+ * Kaynakta fonksiyon yalnızca AY ve GÜNÜ geri doğruluyordu, YILI değil.
+ * `Date.UTC` 0-99 arası yılları 1900+yıl olarak yorumladığı için
+ * `"0001-01-01"` girdisi null dönmüyor, sessizce **1901-01-01** dönüyordu:
+ *
+ *     "0000-01-01" -> 1900-01-01     "0099-06-15" -> 1999-06-15
+ *     "0001-01-01" -> 1901-01-01     "0100-01-01" -> 0100-01-01  (sınır)
+ *
+ * Neden düzeltildi. Bu fonksiyon KULLANICI GİRDİSİ ayrıştırıyor — plan
+ * başlangıç tarihi. Sessiz 1901 kayması, planın 30 gününü de yanlış güne
+ * üretir ve `parseIsoDate → toIsoDate` gidiş-dönüşünü kayıplı yapar; hata
+ * girdide değil, çok ilerideki takvimde görünür. Reddetmek, kabul edip
+ * başka bir tarih döndürmekten her zaman iyidir.
+ *
+ * Aralık `MIN_YEAR`-`MAX_YEAR` (1970-2100): alt sınır Unix epoch'u, üst sınır
+ * bu ürünün ömrünün çok ötesi. Aralık dışı → `null`, tıpkı geçersiz ay/gün
+ * gibi — çağıranlar zaten null'ı ele alıyor, yeni bir hata yolu doğmuyor.
+ *
+ * Bu BİLİNÇLİ bir davranış değişikliğidir; "olduğu gibi taşı" kuralının
+ * istisnası. Eski davranışı kilitleyen testler yenisine göre güncellendi.
+ *
  * The weekly posting template.
  *
  * The calendar is decided here, not by the model: Monday is a feed post,
@@ -61,10 +83,15 @@ export const MAX_SLOTS = 64;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** ⚠ SAPMA (B5) — makul takvim aralığı. Dışı `null`. Gerekçe dosyanın başında. */
+export const MIN_YEAR = 1970;
+export const MAX_YEAR = 2100;
+
 /** Parses "YYYY-MM-DD" as a UTC midnight, so day arithmetic never shifts. */
 export function parseIsoDate(value: string): Date | null {
   if (!ISO_DATE.test(value)) return null;
   const [year, month, day] = value.split("-").map(Number);
+  if (year < MIN_YEAR || year > MAX_YEAR) return null;
   const date = new Date(Date.UTC(year, month - 1, day));
   if (Number.isNaN(date.getTime())) return null;
   if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;

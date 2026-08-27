@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_SLOTS,
+  MAX_YEAR,
+  MIN_YEAR,
   WEEKDAY_LABEL,
   WEEKLY_TEMPLATE,
   addDays,
@@ -78,38 +80,58 @@ describe("parseIsoDate", () => {
     });
   });
 
-  describe("⚠ devralınan davranış: 0-99 arası yıllar 1900+yıl'a kayar", () => {
+  describe("⚠ SAPMA (B5) — yıl aralığı doğrulanıyor", () => {
     /**
-     * `Date.UTC` 0-99 arası yılları 1900+yıl olarak yorumlar ve `parseIsoDate`
-     * yalnızca AY ve GÜNÜ geri doğruluyor, YILI doğrulamıyor. Sonuç: girdi
-     * kabul edilir ama başka bir yıl döner. Kaynak dosyada da böyle
-     * (threadly/lib/plan/template.ts); taşımada davranış DEĞİŞTİRİLMEDİ.
-     * Bu test, bugünkü gerçeği kilitliyor — düzeltilirse burası kırılacak.
+     * Devralınan davranış: `Date.UTC` 0-99 arası yılları 1900+yıl olarak
+     * yorumluyordu ve fonksiyon yalnızca AY/GÜNÜ geri doğruluyordu, YILI
+     * değil. Sonuç: "0001-01-01" null dönmüyor, sessizce 1901-01-01 dönüyordu.
+     * Bu fonksiyon plan başlangıç tarihini — yani kullanıcı girdisini —
+     * ayrıştırdığı için sessiz kayma planın tamamını yanlış güne üretirdi.
+     * Artık MIN_YEAR-MAX_YEAR dışındaki her yıl reddediliyor.
      */
-    it("'0001-01-01' 1901'e kayar, null dönmez", () => {
-      expect(iso("0001-01-01").getUTCFullYear()).toBe(1901);
+    it("⭐ '0001-01-01' artık NULL döner (eskiden 1901'e kayıyordu)", () => {
+      expect(parseIsoDate("0001-01-01")).toBeNull();
     });
 
-    it("'0099-06-15' 1999'a kayar", () => {
-      expect(iso("0099-06-15").getUTCFullYear()).toBe(1999);
+    it("0-99 aralığının tamamı reddedilir", () => {
+      for (const value of ["0000-01-01", "0001-01-01", "0050-03-10", "0099-06-15"]) {
+        expect(parseIsoDate(value)).toBeNull();
+      }
     });
 
-    it("'0000-01-01' 1900'e kayar", () => {
-      expect(iso("0000-01-01").getUTCFullYear()).toBe(1900);
+    it("100-1969 arası da reddedilir — 1900'e kayma yok, sadece aralık dışı", () => {
+      for (const value of ["0100-01-01", "1492-10-12", "1969-12-31"]) {
+        expect(parseIsoDate(value)).toBeNull();
+      }
     });
 
-    it("bu yüzden gidiş-dönüş 0-99 için KAYIPLI", () => {
-      expect(toIsoDate(iso("0001-01-01"))).toBe("1901-01-01");
+    it("MIN_YEAR sınırı kapsayıcı", () => {
+      expect(parseIsoDate(`${MIN_YEAR - 1}-12-31`)).toBeNull();
+      expect(toIsoDate(iso(`${MIN_YEAR}-01-01`))).toBe("1970-01-01");
     });
 
-    it("100 ve üstü etkilenmez — sınır tam burada", () => {
-      expect(iso("0100-01-01").getUTCFullYear()).toBe(100);
-      expect(toIsoDate(iso("0100-01-01"))).toBe("0100-01-01");
+    it("MAX_YEAR sınırı kapsayıcı", () => {
+      expect(toIsoDate(iso(`${MAX_YEAR}-12-31`))).toBe("2100-12-31");
+      expect(parseIsoDate(`${MAX_YEAR + 1}-01-01`)).toBeNull();
+    });
+
+    it("⭐ kabul edilen her değer için gidiş-dönüş KAYIPSIZ", () => {
+      // Eski davranışın asıl zararı buydu: "0001-01-01" girip "1901-01-01"
+      // geri almak. Aralık daraldığı için artık böyle bir değer kalmadı.
+      for (const value of ["1970-01-01", "2026-08-24", "2024-02-29", "2100-12-31"]) {
+        expect(toIsoDate(iso(value))).toBe(value);
+      }
+    });
+
+    it("aralık dışı yıl, geçersiz ay/gün ile AYNI şekilde reddedilir — yeni hata yolu yok", () => {
+      expect(parseIsoDate("0001-01-01")).toBeNull();
+      expect(parseIsoDate("2026-02-30")).toBeNull();
+      expect(parseIsoDate("çöp")).toBeNull();
     });
   });
 
-  it("dört haneli üst sınırı kabul eder", () => {
-    expect(toIsoDate(iso("9999-12-31"))).toBe("9999-12-31");
+  it("⚠ SAPMA (B5) — dört haneli üst sınır artık reddedilir (9999 > MAX_YEAR)", () => {
+    expect(parseIsoDate("9999-12-31")).toBeNull();
   });
 });
 
@@ -120,8 +142,8 @@ describe("toIsoDate", () => {
     expect(toIsoDate(new Date("2026-08-24T00:00:00.000Z"))).toBe("2026-08-24");
   });
 
-  it("100 ve üstü yıllar için parseIsoDate ile gidiş-dönüş yapar", () => {
-    for (const value of ["2026-01-01", "2024-02-29", "2026-12-31", "0100-06-15"]) {
+  it("kabul edilen yıllar için parseIsoDate ile gidiş-dönüş yapar", () => {
+    for (const value of ["2026-01-01", "2024-02-29", "2026-12-31", "1970-06-15"]) {
       expect(toIsoDate(iso(value))).toBe(value);
     }
   });
