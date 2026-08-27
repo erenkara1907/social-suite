@@ -143,9 +143,11 @@ export type MetricTier = (typeof METRIC_TIERS)[number];
 export interface ContentItemRow {
   id: string;
   brand_id: string;
+  plan_id: string | null;
   channel_id: string | null;
   platform: Platform;
   kind: PostKind;
+  media_type: MediaType;
   day_offset: number | null;
   time_of_day: string | null;
   scheduled_at: string | null;
@@ -157,6 +159,106 @@ export interface ContentItemRow {
   hashtags: string;
   media_url: string | null;
   status: PostStatus;
+  external_post_id: string | null;
+
+  /* §4b devam zinciri. `root_id` denormalize — tüm zincir tek indeks
+     taramasıyla gelir, recursive CTE yok. Trigger türetir, uygulama yazmaz. */
+  parent_id: string | null;
+  root_id: string | null;
+  chain_position: number;
+  continuation_note: string;
+
+  /* §4c tekrar önleme. `embedding` burada YOK — 1024 sayılık vektörü view
+     katmanına taşımanın anlamı yok; benzerlik sorgusu DB'de çalışır. */
+  content_fingerprint: string | null;
+  topic_key: string | null;
+}
+
+/* ── Medya ───────────────────────────────────────────────────────────────── */
+
+/** Platformun beklediği medya biçimi. `00_schema.sql:376-377` ile birebir.
+ *  ⚠ Bu liste BÜYÜK HARF — CHECK öyle. §1.2'nin küçük harf kuralı `platform`,
+ *  `status`, `kind` içindi; `media_type` platform API'sinin kendi sabiti. */
+export const MEDIA_TYPES = ["IMAGE", "VIDEO", "REELS", "STORIES", "CAROUSEL"] as const;
+export type MediaType = (typeof MEDIA_TYPES)[number];
+
+/** `00_schema.sql:292` — media_assets.kind */
+export const MEDIA_KINDS = ["image", "video", "audio"] as const;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
+
+/** `00_schema.sql:302` — media_assets.source_vendor */
+export const MEDIA_SOURCE_VENDORS = ["kie", "fal", "elevenlabs", "upload"] as const;
+export type MediaSourceVendor = (typeof MEDIA_SOURCE_VENDORS)[number];
+
+/** media_jobs.vendor — `upload` YOK, bir iş her zaman bir sağlayıcı çağırır. */
+export const MEDIA_JOB_VENDORS = ["kie", "fal", "elevenlabs"] as const;
+export type MediaJobVendor = (typeof MEDIA_JOB_VENDORS)[number];
+
+/** media_jobs.step — §4d'nin beş adımlı UGC boru hattı. */
+export const MEDIA_JOB_STEPS = [
+  "persona_image", "persona_video", "voice", "lipsync", "post_image",
+] as const;
+export type MediaJobStep = (typeof MEDIA_JOB_STEPS)[number];
+
+/**
+ * media_jobs.state — ⭐ §4a: bu, `content_items.status` ile ORTOGONALDİR.
+ * Bir içerik `needs_review` iken videosu hâlâ `running` olabilir.
+ */
+export const MEDIA_JOB_STATES = [
+  "queued", "running", "succeeded", "failed", "cancelled",
+] as const;
+export type MediaJobState = (typeof MEDIA_JOB_STATES)[number];
+
+/** `provider_credentials.provider` — D2 ile `instagram` da burada. */
+export const PROVIDERS = [
+  "anthropic", "kie", "elevenlabs", "fal", "openai", "voyage", "instagram",
+] as const;
+export type Provider = (typeof PROVIDERS)[number];
+
+export interface MediaAssetRow {
+  id: string;
+  brand_id: string;
+  kind: MediaKind;
+  storage_path: string;
+  public_url: string;
+  mime_type: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  source_vendor: MediaSourceVendor | null;
+  created_at: string;
+}
+
+export interface MediaJobRow {
+  id: string;
+  brand_id: string;
+  content_item_id: string | null;
+  persona_id: string | null;
+  vendor: MediaJobVendor;
+  vendor_model: string;
+  vendor_task_id: string | null;
+  step: MediaJobStep;
+  state: MediaJobState;
+  output_url: string | null;
+  result_asset_id: string | null;
+  error: string | null;
+  credits_estimated: number;
+  credits_charged: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+export interface PersonaRow {
+  id: string;
+  brand_id: string;
+  name: string;
+  prompt: string;
+  image_asset_id: string | null;
+  default_voice_id: string | null;
+  is_archived: boolean;
+  created_at: string;
 }
 
 export interface ChannelRow {
