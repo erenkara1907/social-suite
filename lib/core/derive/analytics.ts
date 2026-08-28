@@ -68,6 +68,34 @@ export function buildHeatmap(posts: ContentItemRow[], metrics: MetricRow[], tz =
   return { heatmap, bestWindows };
 }
 
+/**
+ * ⭐ adım 9 A1 — `/dashboard`'ın "bu ay erişim" KPI'sı. Ham `content_metrics`
+ * satırları bağımsız olaylar DEĞİL, aynı içeriğin `h6`/`d1`/`final`
+ * fotoğrafları — toplamak aynı gönderiyi üç kez sayıp erişimi şişirir.
+ * `/analytics`'in kullandığı mantığın aynısı: içerik başına en son ölçüm,
+ * `h6` hariç (D1, `brand_latest_metrics`). Yalnızca bu ay YAYINLANMIŞ
+ * içerikler sayılır — "bu ay ne kadar ölçüm toplandığı" değil, "bu ay
+ * yayınlananların erişimi" sorusu.
+ */
+export function buildMonthlyReach(
+  items: ContentItemRow[],
+  metrics: MetricRow[],
+  now: Date,
+  tz = DEFAULT_TZ,
+): number {
+  const eligible = metrics.filter((m) => m.tier !== "h6");
+  const latest = latestMetrics(eligible);
+  const target = zonedParts(now, tz);
+
+  return items
+    .filter((item) => {
+      if (item.status !== "published" || !item.published_at) return false;
+      const published = zonedParts(item.published_at, tz);
+      return published.year === target.year && published.month === target.month;
+    })
+    .reduce((sum, item) => sum + (latest.get(item.id)?.reach ?? 0), 0);
+}
+
 /** Reach per day for the last 14 days, oldest first. */
 export function buildReach14d(metrics: MetricRow[], now: Date, tz = DEFAULT_TZ): number[] {
   const byDay = new Map<string, number>();

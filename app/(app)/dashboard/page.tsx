@@ -2,6 +2,7 @@ import { port } from "@/lib/adapters";
 import { requireBrand } from "@/lib/server/auth";
 import { requestModeOverrides } from "@/lib/server/mode";
 import { buildQueue } from "@/lib/core/derive/calendar";
+import { buildMonthlyReach } from "@/lib/core/derive/analytics";
 import { zonedParts } from "@/lib/core/tz";
 import type { DKpi } from "@/lib/core/types";
 import { ui } from "@/lib/i18n/dict";
@@ -63,9 +64,9 @@ export default async function Page() {
     (item) => item.status === "published" && item.published_at && sameMonth(item.published_at, thisMonth, brand.timezone),
   ).length;
 
-  const reachThisMonth = metrics
-    .filter((m) => sameMonth(m.collected_at, thisMonth, brand.timezone))
-    .reduce((sum, m) => sum + m.reach, 0);
+  // ⭐ adım 9 A1 — ham satırları toplamak yerine içerik başına en son ölçüm,
+  // h6 hariç (D1). Ayrıntı: lib/core/derive/analytics.ts buildMonthlyReach.
+  const reachThisMonth = buildMonthlyReach(items, metrics, now, brand.timezone);
 
   const kpis: DKpi[] = [
     { label: label("dashboardKpiPlanned"), value: String(plannedThisMonth), icon: "calendar-range", tone: 1 },
