@@ -989,7 +989,17 @@ create or replace function public.find_similar_content(
 ) returns table (
   id uuid, title text, hook text, status text,
   published_at timestamptz, similarity real
-) language sql stable security definer set search_path = public as $$
+)
+-- ⚠ search_path'te `extensions` ŞART — diğer altı fonksiyondan farkı bu.
+-- Supabase `vector` uzantısını `extensions` şemasına kuruyor ve `<=>` bir
+-- INFIX OPERATÖR: `extensions.<=>` diye yazılamaz, yalnızca search_path'ten
+-- çözülür. `set search_path = public` ile canlıda şu hatayı veriyordu:
+--   ERROR: operator does not exist: extensions.vector <=> extensions.vector
+-- (Adım 2 canlı uygulaması, 2026-08-28. Lokal testte yakalanmamıştı; orada
+--  vector `public`'e kuruluydu.)
+-- `public` başta kalıyor ve liste hâlâ kapalı — `extensions` Supabase'in
+-- yönettiği bir şema olduğu için SECURITY DEFINER daraltmasını gevşetmiyor.
+language sql stable security definer set search_path = public, extensions as $$
   select c.id, c.title, c.hook, c.status, c.published_at,
          (1 - (c.embedding <=> p_embedding))::real as similarity
     from public.content_items c
