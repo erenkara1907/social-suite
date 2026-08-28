@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -66,14 +67,20 @@ function toOwnedBrand(row: BrandRow): OwnedBrand {
  * yolu göremez (`headers()` pathname taşımaz). Kullanıcı buraya normalde
  * hiç düşmez: proxy.ts korumalı yolları `?next=` ile zaten çevirir. Bu yol
  * yalnızca `matcher`'ın kaçırdığı bir rota için bir emniyet kemeridir.
+ *
+ * ⭐ `cache()` — adım 8 A2. `(app)/layout.tsx` guard için çağırıyor, bir
+ * sayfa marka/kullanıcı bilgisine tekrar ihtiyaç duyarsa AYNI istek
+ * içinde ikinci bir çağrı bunu tekrar sorgulamaz; React bu render turunda
+ * sonucu belleğe alır. Next'in "prop olarak geçir" öneremediği yerde
+ * (ayrı `page.tsx` dosyaları arasında layout prop akıtamaz) resmi çözüm bu.
  */
-export async function requireUser(): Promise<User> {
+export const requireUser = cache(async (): Promise<User> => {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) redirect("/login");
   return data.user;
-}
+});
 
 /**
  * Kullanıcının markası; yoksa `/onboarding`'e yönlendirir.
@@ -88,7 +95,7 @@ export async function requireUser(): Promise<User> {
  * Birden çok marka olduğunda ilki (en eski) seçilir. Marka seçici §11 S2'nin
  * organizasyon katmanıyla gelecek; bugün tek marka var.
  */
-export async function requireBrand(): Promise<{ user: User; brand: OwnedBrand }> {
+export const requireBrand = cache(async (): Promise<{ user: User; brand: OwnedBrand }> => {
   const user = await requireUser();
   const supabase = await createClient();
 
@@ -109,13 +116,13 @@ export async function requireBrand(): Promise<{ user: User; brand: OwnedBrand }>
   if (!data) redirect("/onboarding");
 
   return { user, brand: toOwnedBrand(data) };
-}
+});
 
 /**
  * Marka yoksa yönlendirmeden `null` döner — `/onboarding` sayfasının
  * kendisi bunu kullanır (orada `requireBrand()` sonsuz döngü olurdu).
  */
-export async function currentBrand(): Promise<OwnedBrand | null> {
+export const currentBrand = cache(async (): Promise<OwnedBrand | null> => {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -127,4 +134,4 @@ export async function currentBrand(): Promise<OwnedBrand | null> {
 
   if (error) throw new Error(`brands okunamadı: ${error.message}`);
   return data ? toOwnedBrand(data) : null;
-}
+});

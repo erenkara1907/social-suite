@@ -4,6 +4,7 @@ import { anyDemo, PORT_NAMES } from "@/lib/adapters";
 import { Sidebar } from "@/components/app/sidebar";
 import { Topbar } from "@/components/app/topbar";
 import { DemoBanner } from "@/components/app/demo-banner";
+import { BrandProvider } from "@/components/app/brand-context";
 import type { ModuleName } from "@/app.config";
 
 /**
@@ -45,7 +46,7 @@ const SHELL_MODULES: readonly ModuleName[] = [
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const { user } = await requireBrand();
+  const { user, brand } = await requireBrand();
 
   // §9.1: mod SUNUCUDA çözülür ve istemciye `isDemo` olarak veri gibi iner.
   // Çerez ezmesi üretimde zaten ölü kod (§11 S6).
@@ -61,13 +62,15 @@ export default async function AppLayout({
   };
 
   return (
-    <div className="flex min-h-dvh">
-      <Sidebar user={sidebarUser} modules={SHELL_MODULES} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar modules={SHELL_MODULES} />
-        <DemoBanner isDemo={isDemo} />
-        <main className="flex-1 px-5 py-6">{children}</main>
+    <BrandProvider value={{ name: brand.name, timezone: brand.timezone }}>
+      <div className="flex min-h-dvh">
+        <Sidebar user={sidebarUser} modules={SHELL_MODULES} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar modules={SHELL_MODULES} />
+          <DemoBanner isDemo={isDemo} />
+          <main className="flex-1 px-5 py-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </BrandProvider>
   );
 }

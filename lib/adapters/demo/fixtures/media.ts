@@ -11,6 +11,10 @@
  * + "demo çıktı" rozeti gösterecek. Stok pazarlama videosu UGC stüdyosunun ne
  * ürettiğini yanlış anlatırdı.
  *
+ * ⚠ `reelV60` bu yüzden `kind: "video"` DEĞİL — dosya bir `.jpg` poster
+ * (`public/demo/ugc/v60-demleme.jpg`), gerçek bir video değil. `duration_ms`
+ * `null`: poster'ın süresi yok. Video oynatıcı bileşeni bu posteri gösterir.
+ *
  * ⭐ İKİ TABLO, İKİ SORUMLULUK (§4d):
  *   `media_assets` = kalıcı dosya (Storage'da duruyor, `public_url` yayınlanabilir)
  *   `media_jobs`   = üretim denemesi (vendor'ın GEÇİCİ URL'i, kredi, hata)
@@ -66,14 +70,14 @@ export function demoMediaAssets(now: Date): MediaAssetRow[] {
     {
       id: ASSET_IDS.reelV60,
       brand_id: DEMO_BRAND_ID,
-      kind: "video",
-      storage_path: `${DEMO_BRAND_ID}/ugc/v60-demleme.mp4`,
-      public_url: "/demo/ugc/v60-demleme.mp4",
-      mime_type: "video/mp4",
-      bytes: 8_640_000,
+      kind: "image",
+      storage_path: `${DEMO_BRAND_ID}/ugc/v60-demleme.jpg`,
+      public_url: "/demo/ugc/v60-demleme.jpg",
+      mime_type: "image/jpeg",
+      bytes: 56_368,
       width: 1080,
       height: 1920,
-      duration_ms: 21_000,
+      duration_ms: null,
       source_vendor: "fal",
       created_at: day(now, -12),
     },
