@@ -80,3 +80,28 @@ export function monthShape(year: number, month: number) {
   const firstWeekday = (firstWeekdaySunday + 6) % 7; // shift Sunday-first to Monday-first
   return { daysInMonth, firstWeekday };
 }
+
+/**
+ * adım 9 B3 — `/settings`'in saat dilimi `<select>`'i için kısaltılmış,
+ * kullanıcı dostu bir liste. Sunucu tarafı doğrulama bu listeye DEĞİL, tam
+ * IANA veritabanına karşı yapılır (`isValidTimeZone`) — DB'de zaten bu
+ * listenin dışında bir değer varsa (örn. göç edilmiş bir hesap) form yine
+ * de kabul etsin diye.
+ */
+export const COMMON_TIMEZONES = [
+  "Europe/Istanbul", "Europe/London", "Europe/Berlin", "Europe/Paris",
+  "Europe/Moscow", "America/New_York", "America/Los_Angeles", "America/Chicago",
+  "America/Sao_Paulo", "Asia/Dubai", "Asia/Tokyo", "Asia/Singapore",
+  "Asia/Shanghai", "Asia/Kolkata", "Australia/Sydney", "Pacific/Auckland",
+  "UTC",
+] as const;
+
+/** Geçerli bir IANA saat dilimi mi — `Intl`'in kendi veritabanına sorar. */
+export function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}

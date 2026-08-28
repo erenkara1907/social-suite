@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BRAND_FIELDS, EMPTY_BRAND, MAX_LENGTH,
-  isBrandUsable, parseBrand, toPromptBlock, type Brand,
+  brandCompletionPercent, isBrandUsable, isValidLinkToken, parseBrand,
+  splitLinks, toPromptBlock, validateLinks, type Brand,
 } from "@/lib/core/brand/types";
 
 const FULL: Brand = {
@@ -141,5 +142,133 @@ describe("toPromptBlock", () => {
 
   it("sondaki yeni satırla bitmez", () => {
     expect(toPromptBlock(FULL).endsWith("\n")).toBe(false);
+  });
+});
+
+describe("⭐ B3 — form → parseBrand → toPromptBlock dönüşüm kaybı yok", () => {
+  it("settings formunun göndereceği FormData şeklindeki ham nesne toPromptBlock'a kayıpsız ulaşır", () => {
+    // app/(app)/settings/actions.ts BİREBİR bu şekli üretiyor: her BRAND_FIELDS
+    // anahtarı için formData.get(field) (string | null).
+    const formLike: Record<string, string | null> = {
+      name: "Kahve Durağı",
+      industry: "Üçüncü nesil kahveci",
+      description: "Kadıköy'de tek şubeli bir kahveci.",
+      products: "Filtre kahve, cold brew",
+      audience: "25-40 yaş beyaz yakalılar",
+      voice: "Samimi ama abartısız",
+      keywords: "#kahve #kadıköy",
+      links: "kahvedurag.com",
+    };
+
+    const brand = parseBrand(formLike);
+    expect(brand).not.toBeNull();
+
+    const block = toPromptBlock(brand);
+    for (const value of Object.values(formLike)) {
+      expect(block).toContain(value);
+    }
+  });
+});
+
+describe("brandCompletionPercent — adım 9 B4", () => {
+  it("null için 0", () => {
+    expect(brandCompletionPercent(null)).toBe(0);
+  });
+
+  it("boş marka için 0", () => {
+    expect(brandCompletionPercent(EMPTY_BRAND)).toBe(0);
+  });
+
+  it("tamamen dolu marka için 100", () => {
+    expect(brandCompletionPercent(FULL)).toBe(100);
+  });
+
+  it("⭐ ölçüldü — dört alan dolu (8'de 4) yüzde 50", () => {
+    const half: Brand = { ...EMPTY_BRAND, name: "a", industry: "b", description: "c", products: "d" };
+    expect(brandCompletionPercent(half)).toBe(50);
+  });
+
+  it("⭐ ölçüldü — üç alan dolu (8'de 3) en yakına yuvarlanır: 38", () => {
+    const three: Brand = { ...EMPTY_BRAND, name: "a", industry: "b", description: "c" };
+    expect(brandCompletionPercent(three)).toBe(38);
+  });
+
+  it("yalnızca boşluktan oluşan alanı dolu saymaz", () => {
+    expect(brandCompletionPercent({ ...EMPTY_BRAND, name: "   " })).toBe(0);
+  });
+});
+
+describe("splitLinks", () => {
+  it("boş dizeyi boş dizi yapar", () => {
+    expect(splitLinks("")).toEqual([]);
+  });
+
+  it("yalnızca boşluktan oluşan dizeyi boş dizi yapar", () => {
+    expect(splitLinks("   ")).toEqual([]);
+  });
+
+  it("⭐ ölçüldü — placeholder'daki ' - ' ayracını böler, tekil '-' belirtecini ATAR", () => {
+    expect(splitLinks("instagram.com/kahvedurag - kahvedurag.com")).toEqual([
+      "instagram.com/kahvedurag",
+      "kahvedurag.com",
+    ]);
+  });
+
+  it("virgül ve satır sonuyla da böler", () => {
+    expect(splitLinks("a.com, b.com\nc.com")).toEqual(["a.com", "b.com", "c.com"]);
+  });
+
+  it("tek bağlantıyı tek elemanlı dizi yapar", () => {
+    expect(splitLinks("kahvedurag.com")).toEqual(["kahvedurag.com"]);
+  });
+});
+
+describe("isValidLinkToken", () => {
+  it("çıplak alan adını kabul eder — şema zorunlu değil", () => {
+    expect(isValidLinkToken("kahvedurag.com")).toBe(true);
+  });
+
+  it("şemalı tam URL'i kabul eder", () => {
+    expect(isValidLinkToken("https://kahvedurag.com")).toBe(true);
+  });
+
+  it("yol içeren bir bağlantıyı kabul eder", () => {
+    expect(isValidLinkToken("instagram.com/kahvedurag")).toBe(true);
+  });
+
+  it("⭐ ölçüldü — noktasız ana bilgisayar adını reddeder (localhost, çıplak kelime)", () => {
+    expect(isValidLinkToken("localhost")).toBe(false);
+    expect(isValidLinkToken("kahve")).toBe(false);
+  });
+
+  it("boşluklu metni reddeder", () => {
+    expect(isValidLinkToken("not a domain")).toBe(false);
+  });
+
+  it("baştaki/sondaki noktayı reddeder", () => {
+    expect(isValidLinkToken(".com")).toBe(false);
+    expect(isValidLinkToken("a.")).toBe(false);
+  });
+
+  it("boş dizeyi reddeder", () => {
+    expect(isValidLinkToken("")).toBe(false);
+  });
+});
+
+describe("validateLinks", () => {
+  it("boş dize her zaman geçerli — alan opsiyonel", () => {
+    expect(validateLinks("")).toBe(true);
+  });
+
+  it("placeholder'ın kendisi geçerli", () => {
+    expect(validateLinks("instagram.com/kahvedurag - kahvedurag.com")).toBe(true);
+  });
+
+  it("⭐ TEK bir geçersiz belirteç TÜM alanı geçersiz yapar", () => {
+    expect(validateLinks("kahvedurag.com, not a domain")).toBe(false);
+  });
+
+  it("çok sayıda geçerli bağlantıyı kabul eder", () => {
+    expect(validateLinks("a.com\nb.com, c.com")).toBe(true);
   });
 });

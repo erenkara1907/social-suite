@@ -103,6 +103,51 @@ export function isBrandUsable(brand: Brand | null): brand is Brand {
   return brand.name.trim().length > 0 && brand.description.trim().length > 0;
 }
 
+/**
+ * ⭐ adım 9 B4 — /settings ve /plan'ın paylaştığı tek hesap. Boş marka 0,
+ * hepsi dolu 100. `name` de dahil sekiz alanın hepsi eşit ağırlıklı —
+ * `toPromptBlock`'un okuduğu satırların tamamı bu.
+ */
+export function brandCompletionPercent(brand: Brand | null): number {
+  if (!brand) return 0;
+  const filled = BRAND_FIELDS.filter((field) => brand[field].trim().length > 0).length;
+  return Math.round((filled / BRAND_FIELDS.length) * 100);
+}
+
+/**
+ * `links` alanı serbest metin — birden çok bağlantı virgül, satır sonu veya
+ * " - " ile ayrılabilir (bkz. `BRAND_PLACEHOLDER.links`: "a.com - b.com").
+ * Tekil bir ayraç olan "-"/"–" belirteci link SAYILMAZ, atılır.
+ */
+const LINK_SEPARATOR = /[\s,]+/;
+
+export function splitLinks(raw: string): string[] {
+  return raw
+    .split(LINK_SEPARATOR)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0 && token !== "-" && token !== "–");
+}
+
+/**
+ * Cömert doğrulama: şema (`https://`) YOKSA eklenir — placeholder çıplak alan
+ * adı gösteriyor ("kahvedurag.com"), kullanıcıdan `https://` yazmasını
+ * istemek gereksiz bir sürtünme olurdu.
+ */
+export function isValidLinkToken(token: string): boolean {
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(token) ? token : `https://${token}`;
+  try {
+    const { hostname } = new URL(withScheme);
+    return hostname.includes(".") && !hostname.startsWith(".") && !hostname.endsWith(".");
+  } catch {
+    return false;
+  }
+}
+
+/** `links` alanının TAMAMI geçerli mi — boş dize her zaman geçerli (alan opsiyonel). */
+export function validateLinks(raw: string): boolean {
+  return splitLinks(raw).every(isValidLinkToken);
+}
+
 /** Trims, drops unknown keys and enforces the caps. Returns null when invalid. */
 export function parseBrand(raw: unknown): Brand | null {
   if (typeof raw !== "object" || raw === null) return null;

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TZ, dayKey, dayKeyOf, monthShape, zonedParts, zonedTime } from "@/lib/core/tz";
+import {
+  COMMON_TIMEZONES, DEFAULT_TZ, dayKey, dayKeyOf, isValidTimeZone, monthShape, zonedParts, zonedTime,
+} from "@/lib/core/tz";
 
 const BERLIN = "Europe/Berlin";
 
@@ -159,5 +161,27 @@ describe("monthShape", () => {
         expect(firstWeekday + daysInMonth).toBeLessThanOrEqual(42);
       }
     }
+  });
+});
+
+describe("isValidTimeZone — adım 9 B3", () => {
+  it("her COMMON_TIMEZONES girdisini geçerli sayar", () => {
+    for (const tz of COMMON_TIMEZONES) expect(isValidTimeZone(tz)).toBe(true);
+  });
+
+  it("listenin dışında ama gerçek bir IANA bölgesini de kabul eder", () => {
+    expect(isValidTimeZone("Pacific/Kiritimati")).toBe(true);
+  });
+
+  it("uydurma bir bölgeyi reddeder", () => {
+    expect(isValidTimeZone("Europe/Atlantis")).toBe(false);
+  });
+
+  it("boş dizeyi reddeder", () => {
+    expect(isValidTimeZone("")).toBe(false);
+  });
+
+  it("⭐ ölçüldü — Intl büyük/küçük harfi normalize eder, farklı case de geçerli sayılır", () => {
+    expect(isValidTimeZone("europe/istanbul")).toBe(true);
   });
 });

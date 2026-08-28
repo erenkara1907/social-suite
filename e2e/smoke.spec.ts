@@ -20,7 +20,7 @@ const MODULES = [
   { path: "/queue", expectStub: false },
   { path: "/studio", expectStub: true }, // adım 10'un işi — hep true kalacak
   { path: "/analytics", expectStub: false },
-  { path: "/settings", expectStub: true }, // FAZ B bitince false
+  { path: "/settings", expectStub: false },
 ] as const;
 
 /** components/app/screen-stub.tsx'in ayırt edici, başka hiçbir yerde

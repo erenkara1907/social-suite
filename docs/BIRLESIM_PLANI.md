@@ -1588,6 +1588,21 @@ Bunun üç somut karşılığı var:
 `brands` satırı yaratır (`/onboarding`), sonra o markanın altında **sahte**
 içerik/metrik/video görür. Sahiplik gerçek, içerik sahte.
 
+**⭐ B2 (adım 9) — `/settings`'in marka profili formu bayrağı hiç OKUMAZ,
+`APP_MODE` ne olursa olsun her zaman gerçek `brands` satırına yazar.**
+
+Gerekçe: `brands` satırı zaten gerçek (`/onboarding`'de oluşturuldu), auth
+gerçek. `APP_MODE=demo` yalnızca EKRANLARIN GÖSTERDİĞİ içerik/metriği demo
+yapar — kullanıcının kendi marka profilini değil. Bunun somut karşılığı:
+`/settings` marka formu `port("brand")`/`resolveMode` katmanına HİÇ girmiyor;
+`app/(app)/settings/actions.ts` `/onboarding`'in `createBrandAction`'ıyla aynı
+desende, oturum sahibinin kendi `createClient()`'ıyla (RLS altında,
+service-role DEĞİL) doğrudan `brands` tablosuna yazıyor. `BrandPort.demo/live`
+(ports.ts) ayrı bir amaca hizmet ediyor — FAZ 2'de `PlannerPort`/`CopyPort`'un
+girdisi olarak marka profilini okuyacak yol, ki o okuma da modu izlemeli
+(demo modda plan üretimi zaten kapalı — §12 adım 9 C5). Yani iki farklı soru:
+"kullanıcı kendi profilini düzenliyor mu" (her zaman gerçek) ile "AI planı
+üretirken hangi markayı okuyor" (moda bağlı) — birbirine karıştırılmadı.
 
 ### 9.2 FAZ 1 ekran tablosu
 
