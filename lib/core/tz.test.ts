@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  COMMON_TIMEZONES, DEFAULT_TZ, dayKey, dayKeyOf, isValidTimeZone, monthShape, zonedParts, zonedTime,
+  COMMON_TIMEZONES, DEFAULT_TZ, dayKey, dayKeyOf, isValidTimeZone, monthShape,
+  zonedParts, zonedTime, zonedTimeToUtc,
 } from "@/lib/core/tz";
 
 const BERLIN = "Europe/Berlin";
@@ -183,5 +184,30 @@ describe("isValidTimeZone — adım 9 B3", () => {
 
   it("⭐ ölçüldü — Intl büyük/küçük harfi normalize eder, farklı case de geçerli sayılır", () => {
     expect(isValidTimeZone("europe/istanbul")).toBe(true);
+  });
+});
+
+describe("zonedTimeToUtc — adım 9 C2 (zonedParts'ın tersi)", () => {
+  it("⭐ ölçüldü — Istanbul 09:00 -> 06:00Z (+03:00 sabit ofset)", () => {
+    expect(zonedTimeToUtc(2026, 8, 24, 9, 0, "Europe/Istanbul").toISOString()).toBe("2026-08-24T06:00:00.000Z");
+  });
+
+  it("⭐ ölçüldü — New York 09:00 (yaz saati, UTC-4) -> 13:00Z", () => {
+    expect(zonedTimeToUtc(2026, 8, 24, 9, 0, "America/New_York").toISOString()).toBe("2026-08-24T13:00:00.000Z");
+  });
+
+  it("zonedParts ile gidiş-dönüş yapar (DST dışı bölgelerde her zaman)", () => {
+    const utc = zonedTimeToUtc(2026, 8, 24, 14, 30, "Europe/Istanbul");
+    const back = zonedParts(utc, "Europe/Istanbul");
+    expect(back).toMatchObject({ year: 2026, month: 8, day: 24, hour: 14, minute: 30 });
+  });
+
+  it("varsayılan bölge Istanbul", () => {
+    expect(zonedTimeToUtc(2026, 8, 24, 9, 0).toISOString()).toBe(zonedTimeToUtc(2026, 8, 24, 9, 0, DEFAULT_TZ).toISOString());
+  });
+
+  it("gün ve ay sınırını doğru geçer", () => {
+    // Istanbul 01:00 -> bir önceki UTC günü 22:00.
+    expect(zonedTimeToUtc(2026, 1, 1, 1, 0, "Europe/Istanbul").toISOString()).toBe("2025-12-31T22:00:00.000Z");
   });
 });

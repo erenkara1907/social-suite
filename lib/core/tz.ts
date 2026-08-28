@@ -105,3 +105,32 @@ export function isValidTimeZone(value: string): boolean {
     return false;
   }
 }
+
+/**
+ * adım 9 C2 — `zonedParts`'ın TERSİ: bir bölgedeki duvar saatini UTC ana
+ * çevirir. `/plan`'ın iskelet slotları (`dayOffset` + `timeOfDay`, marka saat
+ * dilimindeki yerel saat) `content_items` biçimine (UTC `scheduled_at`)
+ * projelenirken gerekiyor — `calendar.ts`'in `buildWeek`/`buildMonthCells`'i
+ * yeniden kullanabilsin diye.
+ *
+ * ⚠ Yaklaşık: yaz saati GEÇİŞ ANINDA (var olmayan veya iki kez yaşanan bir
+ * yerel saat) tek bir "doğru" karşılık yoktur — iki adımlı tahmin yöntemi
+ * (önce UTC=yerel varsay, gerçek ofseti ölç, düzelt) standart ve DST dışında
+ * her zaman tam isabetli; DST anında birkaç dakikalık sapma olabilir. Bu,
+ * bir plan ÖNİZLEMESİ için kabul edilebilir — kesin an içerik onaylanıp
+ * `content_items`'a yazılırken belirlenecek.
+ */
+export function zonedTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone = DEFAULT_TZ,
+): Date {
+  const guess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const got = zonedParts(guess, timeZone);
+  const wantedAsUtc = Date.UTC(year, month - 1, day, hour, minute);
+  const gotAsUtc = Date.UTC(got.year, got.month - 1, got.day, got.hour, got.minute);
+  return new Date(guess.getTime() + (wantedAsUtc - gotAsUtc));
+}

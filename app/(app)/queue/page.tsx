@@ -1,9 +1,8 @@
 import { port } from "@/lib/adapters";
 import { requireBrand } from "@/lib/server/auth";
 import { requestModeOverrides } from "@/lib/server/mode";
-import { buildQueue } from "@/lib/core/derive/calendar";
-import type { ContentItemRow } from "@/lib/core/types";
-import { QueueView, type ChainGroup, type QueueRowView } from "@/components/app/queue-view";
+import { buildChains, buildQueue } from "@/lib/core/derive/calendar";
+import { QueueView, type QueueRowView } from "@/components/app/queue-view";
 
 export const metadata = { title: "Kuyruk" };
 
@@ -51,16 +50,7 @@ export default async function Page() {
   // (yayınlanmış halkalar dahil) kullanılıyor çünkü zincirin ilk halkaları
   // genelde zaten yayında — `queue` onları filtreler ama zincir görünürlüğü
   // hepsini ister.
-  const byRoot = new Map<string, ContentItemRow[]>();
-  for (const item of items) {
-    if (!item.root_id) continue;
-    const group = byRoot.get(item.root_id) ?? [];
-    group.push(item);
-    byRoot.set(item.root_id, group);
-  }
-  const chains: ChainGroup[] = [...byRoot.values()]
-    .filter((group) => group.length > 1)
-    .map((group) => [...group].sort((a, b) => a.chain_position - b.chain_position));
+  const chains = buildChains(items);
 
   const duplicateBlocked = activity.filter((row) => row.action === "duplicate_blocked");
 

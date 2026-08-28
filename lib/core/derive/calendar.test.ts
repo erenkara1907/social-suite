@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   WEEKDAYS,
+  buildChains,
   buildChannels,
   buildMonthCells,
   buildQueue,
@@ -216,6 +217,52 @@ describe("buildQueue", () => {
       item({ id: "1", platform: "instagram", kind: "image", status: "scheduled", title: "a", scheduled_at: "2026-08-24T15:00:00Z", is_best_time: true }),
     ];
     expect(buildQueue(posts, MONDAY_NOON, TZ)[0].best).toBe(true);
+  });
+});
+
+describe("buildChains — adım 9 C4", () => {
+  it("boş girdide boş dizi verir", () => {
+    expect(buildChains([])).toEqual([]);
+  });
+
+  it("root_id'si olmayan satırları hiçbir zincire koymaz", () => {
+    const items = [item({ id: "1", platform: "instagram", kind: "image", status: "published", title: "a" })];
+    expect(buildChains(items)).toEqual([]);
+  });
+
+  it("⭐ TEK halkalı bir 'zincir' zincir SAYILMAZ — en az iki halka gerekir", () => {
+    const items = [
+      item({ id: "1", platform: "instagram", kind: "image", status: "published", title: "a", root_id: "r1", chain_position: 1 }),
+    ];
+    expect(buildChains(items)).toEqual([]);
+  });
+
+  it("aynı root_id'yi paylaşan satırları chain_position sırasına dizer", () => {
+    const items = [
+      item({ id: "3", platform: "instagram", kind: "image", status: "scheduled", title: "üçüncü", root_id: "r1", chain_position: 3 }),
+      item({ id: "1", platform: "instagram", kind: "image", status: "published", title: "birinci", root_id: "r1", chain_position: 1 }),
+      item({ id: "2", platform: "instagram", kind: "image", status: "published", title: "ikinci", root_id: "r1", parent_id: "1", chain_position: 2 }),
+    ];
+    expect(buildChains(items)[0].map((i) => i.id)).toEqual(["1", "2", "3"]);
+  });
+
+  it("⭐ yayınlanmış halkaları da içerir — /queue'nun filtrelediği şeyi ATMAZ", () => {
+    const items = [
+      item({ id: "1", platform: "instagram", kind: "image", status: "published", title: "a", root_id: "r1", chain_position: 1 }),
+      item({ id: "2", platform: "instagram", kind: "image", status: "scheduled", title: "b", root_id: "r1", chain_position: 2 }),
+    ];
+    const [chain] = buildChains(items);
+    expect(chain.map((i) => i.status)).toEqual(["published", "scheduled"]);
+  });
+
+  it("birden çok bağımsız zinciri ayrı gruplar olarak döner", () => {
+    const items = [
+      item({ id: "1", platform: "instagram", kind: "image", status: "published", title: "a", root_id: "r1", chain_position: 1 }),
+      item({ id: "2", platform: "instagram", kind: "image", status: "published", title: "b", root_id: "r1", chain_position: 2 }),
+      item({ id: "3", platform: "x", kind: "text", status: "published", title: "c", root_id: "r2", chain_position: 1 }),
+      item({ id: "4", platform: "x", kind: "text", status: "published", title: "d", root_id: "r2", chain_position: 2 }),
+    ];
+    expect(buildChains(items)).toHaveLength(2);
   });
 });
 

@@ -175,6 +175,30 @@ function whenLabel(instant: string, now: Date, tz: string): L {
   };
 }
 
+/* ── Zincirler (§4b) ─────────────────────────────────────────────────────── */
+
+/** `root_id` paylaşan, `chain_position` sırasına dizilmiş satırlar. */
+export type ChainGroup = ContentItemRow[];
+
+/**
+ * ⭐ adım 9 C4 — hem `/queue` hem `/plan` aynı gruplamayı kullanıyor
+ * (`/queue` zinciri OLDUĞU GİBİ gösteriyor; `/plan` "bu yeni fikir bunlardan
+ * birinin devamı mı" sorusu için referans olarak gösteriyor). Tek gerçek
+ * kaynak burada — iki sayfada iki farklı gruplama mantığı yazılmasın.
+ */
+export function buildChains(items: ContentItemRow[]): ChainGroup[] {
+  const byRoot = new Map<string, ContentItemRow[]>();
+  for (const item of items) {
+    if (!item.root_id) continue;
+    const group = byRoot.get(item.root_id) ?? [];
+    group.push(item);
+    byRoot.set(item.root_id, group);
+  }
+  return [...byRoot.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => [...group].sort((a, b) => a.chain_position - b.chain_position));
+}
+
 /** Anything not yet published, soonest first; loose drafts sink to the bottom. */
 export function buildQueue(posts: ContentItemRow[], now: Date, tz = DEFAULT_TZ): QueueItem[] {
   return posts

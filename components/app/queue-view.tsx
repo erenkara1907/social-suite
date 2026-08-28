@@ -7,8 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import {
   ACTIVITY_ACTION_ICON, MEDIA_JOB_STEP_LABEL, PLATFORM_META, STATUS_LABEL, STATUS_TONE,
-  type ActivityRow, type ContentItemRow, type MediaJobRow, type QueueItem,
+  type ActivityRow, type MediaJobRow, type QueueItem,
 } from "@/lib/core/types";
+import type { ChainGroup } from "@/lib/core/derive/calendar";
+
+export type { ChainGroup };
 
 /** Bir kuyruk satırının render için ihtiyaç duyduğu her şey — `buildQueue()`'nun
  *  çıktısı (§4a durum makinesi) + §4b zincir alanları + o içeriğin `media_jobs`'ı. */
@@ -17,9 +20,6 @@ export interface QueueRowView extends QueueItem {
   continuationNote: string;
   jobs: MediaJobRow[];
 }
-
-/** `root_id` paylaşan, `chain_position` sırasına dizilmiş satırlar. */
-export type ChainGroup = ContentItemRow[];
 
 function QueueActions({ status, hint }: { status: QueueRowView["status"]; hint: string }) {
   const { ui } = useLang();
@@ -109,7 +109,17 @@ function QueueRow({ row }: { row: QueueRowView }) {
   );
 }
 
-function ChainCard({ chains }: { chains: ChainGroup[] }) {
+/** `/plan` bu kartı FARKLI bir başlık/açıklamayla yeniden kullanıyor (C4) —
+ *  "zincir bu" değil, "bu yeni fikir bunlardan birinin devamı olabilir mi" sorusu. */
+export function ChainCard({
+  chains,
+  title,
+  description,
+}: {
+  chains: ChainGroup[];
+  title?: string;
+  description?: string;
+}) {
   const { ui } = useLang();
   if (chains.length === 0) return null;
 
@@ -118,9 +128,9 @@ function ChainCard({ chains }: { chains: ChainGroup[] }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="link-2" className="h-4 w-4 text-primary" />
-          {ui.queueChainTitle}
+          {title ?? ui.queueChainTitle}
         </CardTitle>
-        <CardDescription>{ui.queueChainHint}</CardDescription>
+        <CardDescription>{description ?? ui.queueChainHint}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {chains.map((chain) => (

@@ -9,14 +9,12 @@ import { STATE_FILE, type E2eUser } from "./global-setup";
  * eşleşiyor (bilinçli — e2e testi kara kutu olarak kalsın, uygulama
  * kaynağını import etmesin).
  *
- * ⚠ `expectStub` bu ADIMIN İÇİNDEKİ ilerlemeyi takip eder — statik bir liste
- * değil. FAZ A'nın kontrol noktasında `/plan` ve `/settings` HÂLÂ ScreenStub
- * (FAZ B/C henüz yazılmadı); her ikisi kendi fazı bittiğinde `false`'a çevrilir.
- * `/studio` bu ADIMIN kapsamı dışı (adım 10), bu yüzden hep `true` kalır.
+ * ⚠ Adım 9 sonunda `/studio` DIŞINDA hiçbir ekran ScreenStub göstermiyor —
+ * `/studio` adım 10'un işi, bu yüzden tek `true` kalan o.
  */
 const MODULES = [
   { path: "/dashboard", expectStub: false },
-  { path: "/plan", expectStub: true }, // FAZ C bitince false
+  { path: "/plan", expectStub: false },
   { path: "/queue", expectStub: false },
   { path: "/studio", expectStub: true }, // adım 10'un işi — hep true kalacak
   { path: "/analytics", expectStub: false },
