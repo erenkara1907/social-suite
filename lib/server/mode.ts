@@ -17,6 +17,16 @@ import { modeCookieName, type ModeOverrides } from "@/lib/adapters/mode";
  * kapısı). Bu fonksiyon üretimde de çalışır ama çıktısı yok sayılır.
  */
 export async function requestModeOverrides(): Promise<ModeOverrides> {
+  // ⭐ adım 8 · A3 — §11 S6 bundle doğrulaması bunu yakaladı: `resolveMode`
+  // içindeki `readDevCookie` üretimde KARARI etkisiz kılıyordu ama bu
+  // fonksiyon MEKANİZMAYI (çerez adını kurup okumayı) ortam fark etmeden
+  // çalıştırıyordu — `modeCookieName()`'ın döndürdüğü `sm:mode:` dize
+  // literali üretim bundle'ına sızıyordu. Kapı burada da tekrarlanır: kararı
+  // değil, kod yolunun kendisini üretimde hiç ÇALIŞTIRMAZ — `cookies()` ve
+  // `modeCookieName()` üretimde hiç çağrılmaz, dolayısıyla ikisinin de
+  // kalıntısı ölü kod elemesiyle bundle'dan düşer.
+  if (process.env.NODE_ENV === "production") return {};
+
   const store = await cookies();
 
   const entries = PORT_NAMES.map(

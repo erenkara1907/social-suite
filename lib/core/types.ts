@@ -132,6 +132,40 @@ export const ACTIVITY_ACTIONS = [
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
+/** ⭐ adım 8 — `/queue`'nun tekrar-önleme kanıtı ve `/dashboard`'ın aktivite
+ *  akışı ikisi de bunu okur. `duplicate_blocked` ve `continuation_created`
+ *  §4c'nin iki kararının (0.92 üstü engelle, 0.82-0.92 arası "devam" öner)
+ *  ekrandaki karşılığı. */
+export const ACTIVITY_ACTION_LABEL: Record<ActivityAction, L> = {
+  queued: { tr: "Kuyruğa alındı", en: "Queued" },
+  approved: { tr: "Onaylandı", en: "Approved" },
+  published: { tr: "Yayınlandı", en: "Published" },
+  failed: { tr: "Başarısız oldu", en: "Failed" },
+  shifted_to_best_time: { tr: "En iyi saate kaydırıldı", en: "Shifted to best time" },
+  plan_generated: { tr: "Plan üretildi", en: "Plan generated" },
+  caption_written: { tr: "Metin yazıldı", en: "Caption written" },
+  ugc_requested: { tr: "UGC video istendi", en: "UGC video requested" },
+  ugc_ready: { tr: "UGC video hazır", en: "UGC video ready" },
+  duplicate_blocked: { tr: "Tekrar üretim engellendi", en: "Duplicate blocked" },
+  continuation_created: { tr: "Devam içeriği oluşturuldu", en: "Continuation created" },
+  metrics_collected: { tr: "Metrik toplandı", en: "Metrics collected" },
+};
+
+export const ACTIVITY_ACTION_ICON: Record<ActivityAction, string> = {
+  queued: "list-plus",
+  approved: "check",
+  published: "send",
+  failed: "circle-x",
+  shifted_to_best_time: "clock-arrow-up",
+  plan_generated: "sparkles",
+  caption_written: "pen-line",
+  ugc_requested: "clapperboard",
+  ugc_ready: "film",
+  duplicate_blocked: "shield-alert",
+  continuation_created: "link-2",
+  metrics_collected: "bar-chart-3",
+};
+
 /* ── Metrik katmanı ──────────────────────────────────────────────────────── */
 
 /** ⭐ D1 — `final` "artık toplama yapılmaz" demek, "okunabilir tek satır" değil. */
@@ -199,6 +233,16 @@ export const MEDIA_JOB_STEPS = [
   "persona_image", "persona_video", "voice", "lipsync", "post_image",
 ] as const;
 export type MediaJobStep = (typeof MEDIA_JOB_STEPS)[number];
+
+/** ⭐ adım 8 — `/queue`'nun `running` iş göstergesi hangi adımda olduğunu
+ *  söylüyor. */
+export const MEDIA_JOB_STEP_LABEL: Record<MediaJobStep, L> = {
+  persona_image: { tr: "Persona görseli", en: "Persona image" },
+  persona_video: { tr: "Persona videosu", en: "Persona video" },
+  voice: { tr: "Seslendirme", en: "Voiceover" },
+  lipsync: { tr: "Dudak senkronu", en: "Lipsync" },
+  post_image: { tr: "Gönderi görseli", en: "Post image" },
+};
 
 /**
  * media_jobs.state — ⭐ §4a: bu, `content_items.status` ile ORTOGONALDİR.

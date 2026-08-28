@@ -120,6 +120,17 @@ export const ui = {
     typeReel: "Reels",
     typeStory: "Hikaye",
     storyNote: "Hikayeler 24 saat sonra kendiliğinden kaybolur.",
+    // ── adım 8: /queue ──────────────────────────────────────────────────
+    queueChainTitle: "Devam zinciri",
+    queueChainHint: "Aynı fikrin birbirine atıfla devam eden halkaları — önceki bölüme atıf yaparak yazılıyor.",
+    queueDuplicateTitle: "Tekrar önleme",
+    queueDuplicateHint: "Motor üretmeden önce markanın geçmiş içerikleriyle karşılaştırıyor. Aşağıdaki fikir daha önce üretilmiş bulundu ve engellendi.",
+    queueJobRunning: "Video üretiliyor",
+    queuePublishingTitle: "Yayınlanıyor — kilitli",
+    queuePublishingHint: "Çifte yayını önlemek için satır kilitlendi; ikinci bir zamanlayıcı çalışması bu kaydı alamaz.",
+    queueActionDisabledHint: "Demo modda devre dışı",
+    queueReschedule: "Yeniden zamanla",
+    queueCancel: "İptal",
   },
   en: {
     features: "Features",
@@ -225,6 +236,17 @@ export const ui = {
     typeReel: "Reel",
     typeStory: "Story",
     storyNote: "Stories disappear on their own after 24 hours.",
+    // ── step 8: /queue ──────────────────────────────────────────────────
+    queueChainTitle: "Continuation chain",
+    queueChainHint: "Rings of the same idea that build on each other — each one refers back to the one before it.",
+    queueDuplicateTitle: "Duplicate prevention",
+    queueDuplicateHint: "Before generating, the engine checks the brand's past content. The idea below was already produced and got blocked.",
+    queueJobRunning: "Rendering video",
+    queuePublishingTitle: "Publishing — locked",
+    queuePublishingHint: "The row is locked to prevent a double publish; a second scheduler run cannot pick it up.",
+    queueActionDisabledHint: "Disabled in demo mode",
+    queueReschedule: "Reschedule",
+    queueCancel: "Cancel",
   },
 } satisfies Record<Lang, Record<string, string>>;
 

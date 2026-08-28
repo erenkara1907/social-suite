@@ -57,4 +57,19 @@ describe("requestModeOverrides", () => {
     const overrides = await requestModeOverrides();
     expect(overrides.cookies?.copy).toBe("prod");
   });
+
+  /** ⭐ adım 8 · A3 — §11 S6 bundle doğrulamasının yakaladığı kaçak: bu kapı
+   *  olmadan `modeCookieName()`'ın döndürdüğü `sm:mode:` dize literali
+   *  üretim bundle'ına sızıyordu, `readDevCookie`'nin `NODE_ENV` kapısı
+   *  yalnızca KARARI etkisiz kılıyordu, MEKANİZMAYI değil. */
+  it("⭐ üretimde erken {} döner — cookies() ve modeCookieName() hiç çağrılmaz", async () => {
+    store.set(modeCookieName("planner"), "live");
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const overrides = await requestModeOverrides();
+      expect(overrides).toEqual({});
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
