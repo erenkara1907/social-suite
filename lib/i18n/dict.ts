@@ -144,6 +144,15 @@ export const ui = {
     analyticsTierD1: "d1 · erken ölçüm",
     analyticsTierHint: "\"final\" 30 günlük toplamanın bittiğini gösterir; \"d1\" ölçüm hâlâ sürüyor demektir — ikisi de geri beslemeye girer, yalnızca güvenilirlik ağırlığı farklı.",
     analyticsH6Excluded: "İlk 48 saatin erken ve gürültülü ölçümleri (h6) bu sayılara girmiyor.",
+    // ── adım 8: /dashboard ──────────────────────────────────────────────
+    dashboardKpiPlanned: "Bu ay planlanan",
+    dashboardKpiReview: "Onay bekleyen",
+    dashboardKpiPublished: "Bu ay yayınlanan",
+    dashboardKpiReach: "Bu ay erişim",
+    dashboardUpcoming: "Yaklaşan yayınlar",
+    dashboardUpcomingEmpty: "Yaklaşan yayın yok.",
+    dashboardQuickAccess: "Hızlı erişim",
+    dashboardEmptyActivity: "Henüz hareket yok.",
   },
   en: {
     features: "Features",
@@ -273,6 +282,15 @@ export const ui = {
     analyticsTierD1: "d1 · early read",
     analyticsTierHint: "\"final\" means the 30-day collection window is over; \"d1\" means collection is still running — both feed the loop back, they just carry a different reliability weight.",
     analyticsH6Excluded: "The first 48 hours' early, noisy reads (h6) are not counted here.",
+    // ── step 8: /dashboard ──────────────────────────────────────────────
+    dashboardKpiPlanned: "Planned this month",
+    dashboardKpiReview: "Needs review",
+    dashboardKpiPublished: "Published this month",
+    dashboardKpiReach: "Reach this month",
+    dashboardUpcoming: "Upcoming publishes",
+    dashboardUpcomingEmpty: "Nothing coming up.",
+    dashboardQuickAccess: "Quick access",
+    dashboardEmptyActivity: "No activity yet.",
   },
 } satisfies Record<Lang, Record<string, string>>;
 
