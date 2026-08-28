@@ -1561,6 +1561,34 @@ function resolveMode(port: PortName): Mode {
   (`empty-state.tsx:25`) bu bayrağı gösterir. Kullanıcı hangi modda olduğunu
   ekranda görür — sessiz düşme kapanır.
 
+**⭐ Bayrak yalnızca VERİYİ kapsar — kimliği DEĞİL.** (Adım 7 oturumu,
+2026-08-28.)
+
+`APP_MODE=demo` bir sonuç veriyor: ekrandaki sayılar sahte. Bir sonuç
+VERMİYOR: "giriş yapmadan gezilebilir". Kimlik doğrulama her modda gerçektir.
+
+Gerekçe iş sırasıyla ilgili. Guard'ı FAZ 1'de gevşetip FAZ 2'de sıkmak,
+adım 8-10'da yazılan her sayfayı ikinci kez gözden geçirmek demekti — çünkü
+o sayfalar "kullanıcı yok" varsayımıyla yazılmış olurdu. Sekiz ekranın
+sekizinde de `requireBrand()`'in döndürdüğü marka kimliği baştan var.
+
+Bunun üç somut karşılığı var:
+
+1. `proxy.ts` siraya'nın *"Supabase yoksa guard'ı tamamen kapat"* satırını
+   **taşımaz** (`siraya/proxy.ts:11`). Yapılandırma eksikse korumalı yollar
+   yine `/login`'e gider; `/login` orada açık bir yapılandırma hatası gösterir.
+2. `components/auth/auth-screen.tsx`'te **demo bypass yoktur**. siraya'nın
+   `enterDemo()`'su (`auth-screen.tsx:44-49`) taşınmadı.
+3. `lib/supabase/{server,client}.ts` yapılandırma eksikken `null` **dönmez**,
+   fırlatır. Sessiz `null`, "kullanıcı giriş yapmamış" ile "Supabase hiç
+   yapılandırılmamış" durumlarını tek sonuca indiriyordu — bu bölümün
+   *"sessiz düşme"* diye adlandırdığı hatanın kimlik katmanındaki hâli.
+
+**Demo modda kullanıcı ne görür:** gerçek bir hesapla giriş yapar, gerçek bir
+`brands` satırı yaratır (`/onboarding`), sonra o markanın altında **sahte**
+içerik/metrik/video görür. Sahiplik gerçek, içerik sahte.
+
+
 ### 9.2 FAZ 1 ekran tablosu
 
 | Ekran | Demo kaynağı | Adapter arayüzü | FAZ 2'de bağlanacak servis |

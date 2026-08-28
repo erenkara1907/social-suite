@@ -16,7 +16,21 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { "@": fileURLToPath(new URL(".", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL(".", import.meta.url)),
+      // `server-only`'nin varsayılan girişi import edildiğinde FIRLATIR —
+      // paketin tüm işi bu. Next onu `react-server` koşuluyla `empty.js`'e
+      // çözüyor; vitest o koşulu bilmediği için elle eşliyoruz. Aksi hâlde
+      // `lib/server/*` ve `lib/supabase/admin.ts` test edilemezdi.
+      // ⚠ Yalnızca test koşucusu için. Üretim derlemesinde koruma yerinde:
+      // bir Client Component admin.ts'i import ederse build patlar.
+      // Dosya yolu, `server-only/empty` DEĞİL: paketin `exports` alanı
+      // alt yolu yalnızca `react-server` koşulunda açıyor, vitest o koşulda
+      // koşmadığı için isimle çözülemiyor.
+      "server-only": fileURLToPath(
+        new URL("node_modules/server-only/empty.js", import.meta.url),
+      ),
+    },
   },
   test: {
     environment: "jsdom",
