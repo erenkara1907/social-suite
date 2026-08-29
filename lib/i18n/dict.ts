@@ -165,6 +165,16 @@ export const ui = {
     queueActionDisabledHint: "Demo modda devre dışı",
     queueReschedule: "Yeniden zamanla",
     queueCancel: "İptal",
+    // ── adım 12: iş kuyruğu görünürlüğü ──────────────────────────────────
+    jobsQueueTitle: "İş kuyruğu durumu",
+    jobsQueueHint: "Arka plan işleri — plan üretimi, yayın, metrik toplama. Adım 14'ten itibaren dolacak; şu an boşsa bu beklenen.",
+    jobsQueuePending: "Bekleyen",
+    jobsQueueRunning: "Çalışan",
+    jobsQueueDead: "Ölü mektup",
+    jobsQueueSucceeded: "Tamamlanan",
+    jobsQueueDeadListTitle: "Ölü mektup — son hata",
+    jobsQueueDeadEmpty: "Ölü mektupta iş yok.",
+    jobsQueueEmptyNote: "Henüz hiç iş çalışmadı — bu adımdan sonraki özellikler (plan üretimi, yayın…) devreye girince burada görünecek.",
     // ── adım 8: /analytics ──────────────────────────────────────────────
     analyticsReach14d: "Erişim · 14 gün",
     analyticsAvgEngagement: "Ortalama etkileşim",
@@ -365,6 +375,16 @@ export const ui = {
     queueActionDisabledHint: "Disabled in demo mode",
     queueReschedule: "Reschedule",
     queueCancel: "Cancel",
+    // ── step 12: job queue visibility ────────────────────────────────────
+    jobsQueueTitle: "Job queue status",
+    jobsQueueHint: "Background jobs — plan generation, publishing, metrics collection. Fills in from step 14 onward; empty is expected for now.",
+    jobsQueuePending: "Pending",
+    jobsQueueRunning: "Running",
+    jobsQueueDead: "Dead letter",
+    jobsQueueSucceeded: "Succeeded",
+    jobsQueueDeadListTitle: "Dead letter — last error",
+    jobsQueueDeadEmpty: "Nothing in the dead letter.",
+    jobsQueueEmptyNote: "No job has run yet — this fills in once later steps (plan generation, publishing…) go live.",
     // ── step 8: /analytics ──────────────────────────────────────────────
     analyticsReach14d: "Reach · 14 days",
     analyticsAvgEngagement: "Average engagement",

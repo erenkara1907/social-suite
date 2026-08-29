@@ -1,8 +1,10 @@
 import { port } from "@/lib/adapters";
 import { requireBrand } from "@/lib/server/auth";
 import { requestModeOverrides } from "@/lib/server/mode";
+import { getJobsSummary } from "@/lib/server/jobs/status";
 import { buildChains, buildQueue } from "@/lib/core/derive/calendar";
 import { QueueView, type QueueRowView } from "@/components/app/queue-view";
+import { JobsQueueStatus } from "@/components/app/jobs-queue-status";
 
 export const metadata = { title: "Kuyruk" };
 
@@ -13,8 +15,11 @@ export const metadata = { title: "Kuyruk" };
  * `requireBrand()` `cache()`'li — layout zaten çözdü, burada ikinci bir
  * Supabase sorgusu olmaz (A2, `lib/server/auth.ts`).
  *
- * ⚠ Veriye yalnızca `port("...")` üzerinden erişiliyor; doğrudan fixture
- * importu veya Supabase sorgusu YOK.
+ * ⚠ İçerik/medya verisine yalnızca `port("...")` üzerinden erişiliyor;
+ * doğrudan fixture importu veya Supabase sorgusu YOK — TEK istisna
+ * `getJobsSummary()` (§12 adım 12 FAZ C): genel `jobs` kuyruğu 12 port'un
+ * hiçbirine ait değil, auth gibi platform altyapısı — gerekçe
+ * `lib/server/jobs/status.ts`'te.
  */
 export default async function Page() {
   const { brand } = await requireBrand();
@@ -23,9 +28,10 @@ export default async function Page() {
   const contentPort = port("content", overrides);
   const videoPort = port("video", overrides);
 
-  const [items, activity] = await Promise.all([
+  const [items, activity, jobsSummary] = await Promise.all([
     contentPort.list(),
     contentPort.listActivity(),
+    getJobsSummary(),
   ]);
 
   const now = new Date();
@@ -54,5 +60,10 @@ export default async function Page() {
 
   const duplicateBlocked = activity.filter((row) => row.action === "duplicate_blocked");
 
-  return <QueueView rows={rows} chains={chains} duplicateBlocked={duplicateBlocked} />;
+  return (
+    <div className="space-y-6">
+      <JobsQueueStatus summary={jobsSummary} />
+      <QueueView rows={rows} chains={chains} duplicateBlocked={duplicateBlocked} />
+    </div>
+  );
 }
