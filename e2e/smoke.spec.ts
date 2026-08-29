@@ -9,14 +9,15 @@ import { STATE_FILE, type E2eUser } from "./global-setup";
  * eşleşiyor (bilinçli — e2e testi kara kutu olarak kalsın, uygulama
  * kaynağını import etmesin).
  *
- * ⚠ Adım 9 sonunda `/studio` DIŞINDA hiçbir ekran ScreenStub göstermiyor —
- * `/studio` adım 10'un işi, bu yüzden tek `true` kalan o.
+ * ⚠ Adım 10 sonunda hiçbir ekran ScreenStub göstermiyor — `/studio` ve
+ * `/studio/personas` bu adımda yazıldı, ikisi de artık `false`.
  */
 const MODULES = [
   { path: "/dashboard", expectStub: false },
   { path: "/plan", expectStub: false },
   { path: "/queue", expectStub: false },
-  { path: "/studio", expectStub: true }, // adım 10'un işi — hep true kalacak
+  { path: "/studio", expectStub: false },
+  { path: "/studio/personas", expectStub: false },
   { path: "/analytics", expectStub: false },
   { path: "/settings", expectStub: false },
 ] as const;

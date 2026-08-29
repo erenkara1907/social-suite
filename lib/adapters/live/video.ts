@@ -22,6 +22,9 @@ export const liveVideo: VideoPort = {
   async listJobs() {
     throw new Error(NOT_IMPLEMENTED);
   },
+  async listAllJobs() {
+    throw new Error(NOT_IMPLEMENTED);
+  },
   async listPersonas() {
     throw new Error(NOT_IMPLEMENTED);
   },

@@ -263,6 +263,24 @@ export const MEDIA_JOB_STATES = [
 ] as const;
 export type MediaJobState = (typeof MEDIA_JOB_STATES)[number];
 
+/** ⭐ adım 10 — `/studio`'nun boru hattı rozetleri. `STATUS_TONE`'un
+ *  medya işi karşılığı. */
+export const MEDIA_JOB_STATE_TONE: Record<MediaJobState, "info" | "neutral" | "success" | "warning" | "destructive" | "primary"> = {
+  queued: "neutral",
+  running: "primary",
+  succeeded: "success",
+  failed: "destructive",
+  cancelled: "neutral",
+};
+
+export const MEDIA_JOB_STATE_LABEL: Record<MediaJobState, L> = {
+  queued: { tr: "Sırada", en: "Queued" },
+  running: { tr: "Üretiliyor", en: "Running" },
+  succeeded: { tr: "Tamamlandı", en: "Done" },
+  failed: { tr: "Başarısız", en: "Failed" },
+  cancelled: { tr: "İptal edildi", en: "Cancelled" },
+};
+
 /** `provider_credentials.provider` — D2 ile `instagram` da burada. */
 export const PROVIDERS = [
   "anthropic", "kie", "elevenlabs", "fal", "openai", "voyage", "instagram",

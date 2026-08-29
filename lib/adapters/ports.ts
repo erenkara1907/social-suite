@@ -180,6 +180,13 @@ export interface VideoPort {
   getJob(jobId: string): Promise<MediaJobRow | null>;
   /** Bir içeriğin tüm üretim adımları — `/studio`'nun ilerleme çubuğu. */
   listJobs(contentItemId: string): Promise<MediaJobRow[]>;
+  /**
+   * Marka kapsamlı TÜM işler — `/studio`'nun üretim listesi (§12 adım 10 C1)
+   * ve `/studio/personas`'ın "kaç içerikte kullanıldı" sayacı bunu okur.
+   * `listJobs` tek içeriğe göre filtreliyken bu, `ContentPort.list()`'in
+   * medya işleri için karşılığı.
+   */
+  listAllJobs(): Promise<MediaJobRow[]>;
   listPersonas(): Promise<PersonaRow[]>;
   createPersona(input: NewPersona): Promise<ApiResult<PersonaRow>>;
 }

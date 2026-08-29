@@ -33,6 +33,9 @@ describe("⭐ 12 portun demo implementasyonu ÇAĞRILABİLİYOR", () => {
   it("video.listPersonas()", async () => {
     expect((await port("video").listPersonas()).length).toBeGreaterThan(0);
   });
+  it("video.listAllJobs()", async () => {
+    expect((await port("video").listAllJobs()).length).toBeGreaterThan(0);
+  });
   it("voice.list()", async () => {
     expect((await port("voice").list()).length).toBeGreaterThan(0);
   });

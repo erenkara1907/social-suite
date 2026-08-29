@@ -68,6 +68,10 @@ export const demoVideo: VideoPort = {
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
   },
 
+  async listAllJobs() {
+    return demoMediaJobs(new Date());
+  },
+
   async listPersonas() {
     return demoPersonas(new Date()).filter((p) => !p.is_archived);
   },
