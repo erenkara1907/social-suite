@@ -39,3 +39,4 @@ e2e/.e2e-user.json
 
 # supabase cli scratch
 /supabase/.temp
+.env*
