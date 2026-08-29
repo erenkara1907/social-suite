@@ -215,12 +215,193 @@ alter table public.provider_credentials
 create index if not exists provider_credentials_brand_idx
   on public.provider_credentials (brand_id) where is_active;
 
+-- §12 adım 13 FAZ B — ekranda gösterilecek maskeli önizleme ("sk-...4a2f").
+-- Yazma anında hesaplanır, GİZLİ DEĞİL (Vault'taki değere geri dönüşü yok) —
+-- bu yüzden ayrı bir kolon: masked_hint'i okumak asla decrypt gerektirmez.
+alter table public.provider_credentials
+  add column if not exists masked_hint text not null default '';
+
 drop trigger if exists provider_credentials_touch on public.provider_credentials;
 create trigger provider_credentials_touch before update on public.provider_credentials
   for each row execute function public.touch_updated_at();
 
 alter table public.provider_credentials enable row level security;
--- Politika YOK. Bilinçli.
+-- Politika YOK. Bilinçli. Dört SECURITY DEFINER fonksiyonu bu tabloya
+-- tarayıcının TEK erişim yolu (aşağıda, §12 adım 13 FAZ B):
+--   set_provider_credential / delete_provider_credential / list_provider_credentials
+--     → auth.uid() + owns_brand() ile doğrulanır, `authenticated`'a GRANT edilir
+--       (enqueue_job'un deseni). İkisi de RAW gizli değeri asla DÖNDÜRMEZ.
+--   get_provider_secret
+--     → yalnızca service-role çağırabilir (authenticated'dan REVOKE), RAW
+--       gizli değeri döndüren TEK fonksiyon — adım 14+'in sağlayıcı
+--       çağrılarından önce anahtarı çözmek için (lib/server/credentials.ts).
+
+/* ── Vault yazma/okuma — §12 adım 13 FAZ B ───────────────────────────────────
+   Vault fonksiyonları (`vault.create_secret` vb.) PostgREST'in dışa açtığı
+   şemalarda DEĞİL (yalnızca `public`) — bu yüzden tarayıcı/servis-rolü onları
+   doğrudan `.rpc()` ile çağıramaz. Aşağıdaki `public.*` sarmalayıcılar hem bu
+   köprüyü kurar hem de RAW gizli değerin hangi fonksiyondan çıkabileceğini
+   TEK noktaya indirger (yalnızca `get_provider_secret`). */
+
+-- Yazma — kullanıcının KENDİ oturumuyla çağrılır (enqueue_job deseni).
+-- p_secret boş/null verilirse yalnızca config/label güncellenir, gizli
+-- değere DOKUNULMAZ (örn. yalnızca etiketi değiştirmek için).
+create or replace function public.set_provider_credential(
+  p_brand_id uuid,
+  p_provider text,
+  p_secret   text default null,
+  p_config   jsonb default null,
+  p_label    text default null
+) returns table (
+  id uuid, provider text, masked_hint text, label text,
+  is_active boolean, updated_at timestamptz
+) language plpgsql security definer set search_path = public as $$
+declare
+  v_existing public.provider_credentials;
+  v_secret_id uuid;
+  v_masked   text;
+begin
+  if p_brand_id is null or not public.owns_brand(p_brand_id) then
+    raise exception 'set_provider_credential: marka sahibi değil' using errcode = '42501';
+  end if;
+  if p_provider not in ('anthropic', 'kie', 'elevenlabs', 'fal', 'openai', 'voyage', 'instagram') then
+    raise exception 'set_provider_credential: bilinmeyen sağlayıcı: %', p_provider using errcode = '23514';
+  end if;
+
+  -- ⚠ Fonksiyonun RETURNS TABLE'ı "provider" adında bir OUT parametresi
+  -- (dolayısıyla örtük bir plpgsql değişkeni) tanımlıyor — bare "provider"
+  -- burada tablo sütunuyla ÇAKIŞIR (42702). Bu yüzden sorgu takma adla
+  -- (pc.) yazıldı; fonksiyonun geri kalanında OUT parametreler yalnızca
+  -- son `return query`'de (zaten takma adlı) kullanılıyor.
+  select pc.* into v_existing from public.provider_credentials pc
+   where pc.brand_id = p_brand_id and pc.provider = p_provider;
+
+  if p_secret is not null and length(p_secret) > 0 then
+    v_masked := case
+      when length(p_secret) <= 4 then repeat('•', length(p_secret))
+      else left(p_secret, 3) || '…' || right(p_secret, 4)
+    end;
+
+    if v_existing.vault_secret_id is not null then
+      perform vault.update_secret(v_existing.vault_secret_id, p_secret);
+      v_secret_id := v_existing.vault_secret_id;
+    else
+      v_secret_id := vault.create_secret(
+        p_secret,
+        'pc_' || p_brand_id::text || '_' || p_provider,
+        'provider_credentials: ' || p_provider || ' / brand ' || p_brand_id::text
+      );
+    end if;
+  else
+    -- Gizli değer verilmedi: mevcut vault_secret_id/masked_hint korunur.
+    v_secret_id := v_existing.vault_secret_id;
+    v_masked := coalesce(v_existing.masked_hint, '');
+  end if;
+
+  insert into public.provider_credentials as pc
+    (brand_id, user_id, provider, vault_secret_id, masked_hint, config, label)
+  values
+    (p_brand_id, auth.uid(), p_provider, v_secret_id, v_masked,
+     coalesce(p_config, v_existing.config, '{}'::jsonb),
+     coalesce(p_label, v_existing.label, ''))
+  -- ⚠ `on conflict (brand_id, provider)` YAZILAMAZ — sütun listesi biçimi
+  -- de "provider" OUT parametresiyle aynı 42702 çakışmasına düşüyor
+  -- (canlıda ölçüldü). Kısıt ADI takma ad gerektirmez, çakışmaz.
+  on conflict on constraint provider_credentials_brand_id_provider_key do update set
+    vault_secret_id = excluded.vault_secret_id,
+    masked_hint      = excluded.masked_hint,
+    config            = excluded.config,
+    label             = excluded.label;
+
+  return query
+    select pc.id, pc.provider, pc.masked_hint, pc.label, pc.is_active, pc.updated_at
+      from public.provider_credentials pc
+     where pc.brand_id = p_brand_id and pc.provider = p_provider;
+end $$;
+
+revoke all on function public.set_provider_credential(uuid, text, text, jsonb, text) from public;
+grant execute on function public.set_provider_credential(uuid, text, text, jsonb, text) to authenticated;
+
+-- Silme — vault satırı da gider, provider_credentials satırı yetim vault
+-- kaydı BIRAKMAZ.
+create or replace function public.delete_provider_credential(
+  p_brand_id uuid, p_provider text
+) returns boolean language plpgsql security definer set search_path = public as $$
+declare
+  v_secret_id uuid;
+  v_deleted   boolean;
+begin
+  if p_brand_id is null or not public.owns_brand(p_brand_id) then
+    raise exception 'delete_provider_credential: marka sahibi değil' using errcode = '42501';
+  end if;
+
+  select vault_secret_id into v_secret_id from public.provider_credentials
+   where brand_id = p_brand_id and provider = p_provider;
+
+  delete from public.provider_credentials
+   where brand_id = p_brand_id and provider = p_provider;
+  v_deleted := found;
+
+  if v_deleted and v_secret_id is not null then
+    delete from vault.secrets where id = v_secret_id;
+  end if;
+
+  return v_deleted;
+end $$;
+
+revoke all on function public.delete_provider_credential(uuid, text) from public;
+grant execute on function public.delete_provider_credential(uuid, text) to authenticated;
+
+-- Listeleme — /settings ekranı bunu çağırır. RAW gizli değer YOK, yalnızca
+-- masked_hint ve gizli OLMAYAN alanlar.
+create or replace function public.list_provider_credentials(p_brand_id uuid)
+returns table (
+  provider text, masked_hint text, label text, config jsonb,
+  is_active boolean, last_verified_at timestamptz, last_error text, updated_at timestamptz
+) language plpgsql security definer set search_path = public as $$
+begin
+  if p_brand_id is null or not public.owns_brand(p_brand_id) then
+    raise exception 'list_provider_credentials: marka sahibi değil' using errcode = '42501';
+  end if;
+
+  return query
+    select pc.provider, pc.masked_hint, pc.label, pc.config,
+           pc.is_active, pc.last_verified_at, pc.last_error, pc.updated_at
+      from public.provider_credentials pc
+     where pc.brand_id = p_brand_id;
+end $$;
+
+revoke all on function public.list_provider_credentials(uuid) from public;
+grant execute on function public.list_provider_credentials(uuid) to authenticated;
+
+-- Çözme — adım 14+'in sağlayıcı çağrılarından ÖNCE RAW anahtarı okur. Yalnızca
+-- service-role (authenticated'dan REVOKE) — lib/server/credentials.ts'in TEK
+-- çağırdığı fonksiyon. owns_brand() kontrolü YOK: çağıran zaten sunucu
+-- kodudur (auth.uid() burada set değil, service-role bypass eder) — claim_jobs/
+-- rate_limit_hit ile aynı "sistem içi, RLS'in dışında" sınıf.
+create or replace function public.get_provider_secret(p_brand_id uuid, p_provider text)
+returns table (secret text, config jsonb)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_secret_id uuid;
+  v_config    jsonb;
+begin
+  select vault_secret_id, config into v_secret_id, v_config
+    from public.provider_credentials
+   where brand_id = p_brand_id and provider = p_provider and is_active;
+
+  if v_secret_id is null then
+    return query select null::text, coalesce(v_config, '{}'::jsonb);
+    return;
+  end if;
+
+  return query
+    select ds.decrypted_secret, coalesce(v_config, '{}'::jsonb)
+      from vault.decrypted_secrets ds
+     where ds.id = v_secret_id;
+end $$;
+
+revoke all on function public.get_provider_secret(uuid, text) from public, authenticated;
 
 
 -- ═════════════════════════════════════════════════════════════════════════════

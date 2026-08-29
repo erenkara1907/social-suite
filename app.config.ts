@@ -53,7 +53,21 @@ export interface Integration {
   envVars: string[];
   required: boolean;
   docsUrl: string;
-  purpose: string;
+  /** Bilingual — §12 adım 13 FAZ C: "müşteri beş anahtar girmenin nedenini
+   *  anlamalı". */
+  purpose: L;
+  /** What breaks if this key is missing. Optional — only meaningful for
+   *  keys shown in the /settings integrations form (`managedViaVault`). */
+  whenMissing?: L;
+  /**
+   * true → this key lives in `provider_credentials` + Vault, editable from
+   * /settings (§12 adım 13). false → managed elsewhere:
+   *   - `instagram`: OAuth connect flow, adım 16 (`/channels`) — not a
+   *     raw-text-field key.
+   *   - `supabase`: project-level infrastructure, not a per-customer key
+   *     the /settings credentials form manages.
+   */
+  managedViaVault: boolean;
 }
 
 /** Modules that can be switched on per phase. `nav` is built from these. */
@@ -127,13 +141,47 @@ export const appConfig: AppConfig = {
    * global env to per-brand `provider_credentials` (env is fallback only).
    */
   integrations: [
-    { key: "anthropic", name: "Anthropic (Claude)", envVars: ["ANTHROPIC_API_KEY"], required: true, docsUrl: "https://console.anthropic.com/settings/keys", purpose: "Writes the content plan, captions, hooks and continuation decisions." },
-    { key: "kie", name: "Kie.ai", envVars: ["KIE_API_KEY"], required: false, docsUrl: "https://kie.ai/api-key", purpose: "Generates the persona still and the talking UGC clip." },
-    { key: "elevenlabs", name: "ElevenLabs", envVars: ["ELEVENLABS_API_KEY"], required: false, docsUrl: "https://elevenlabs.io/app/settings/api-keys", purpose: "Turkish voiceover that delivers the script in the persona's voice." },
-    { key: "fal", name: "fal.ai", envVars: ["FAL_KEY"], required: false, docsUrl: "https://fal.ai/dashboard/keys", purpose: "Lipsync for the UGC clip, and post images from a prompt." },
-    { key: "voyage", name: "Voyage AI", envVars: ["VOYAGE_API_KEY"], required: false, docsUrl: "https://dashboard.voyageai.com/api-keys", purpose: "Embeddings for duplicate detection. Must return exactly 1024 dimensions (§4c / D3)." },
-    { key: "instagram", name: "Instagram", envVars: ["INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET"], required: false, docsUrl: "https://developers.facebook.com/apps", purpose: "Publishing and insights. Per-brand app credentials, with the env vars as fallback only (D2)." },
-    { key: "supabase", name: "Supabase", envVars: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"], required: true, docsUrl: "https://supabase.com/dashboard/project/_/settings/api", purpose: "Database, auth and media storage for the whole product." },
+    {
+      key: "anthropic", name: "Anthropic (Claude)", envVars: ["ANTHROPIC_API_KEY"], required: true,
+      docsUrl: "https://console.anthropic.com/settings/keys", managedViaVault: true,
+      purpose: { tr: "İçerik planını, caption'ları, kancaları ve devam kararlarını yazar.", en: "Writes the content plan, captions, hooks and continuation decisions." },
+      whenMissing: { tr: "Plan üretimi ve caption yazımı çalışmaz — ürünün beyni bu anahtara bağlı.", en: "Plan generation and caption writing stop working — the product's brain runs on this key." },
+    },
+    {
+      key: "kie", name: "Kie.ai", envVars: ["KIE_API_KEY"], required: false,
+      docsUrl: "https://kie.ai/api-key", managedViaVault: true,
+      purpose: { tr: "Persona görselini ve konuşan UGC klibini üretir.", en: "Generates the persona still and the talking UGC clip." },
+      whenMissing: { tr: "UGC video üretimi (persona görseli + konuşan klip) çalışmaz.", en: "UGC video production (persona still + talking clip) stops working." },
+    },
+    {
+      key: "elevenlabs", name: "ElevenLabs", envVars: ["ELEVENLABS_API_KEY"], required: false,
+      docsUrl: "https://elevenlabs.io/app/settings/api-keys", managedViaVault: true,
+      purpose: { tr: "Persona'nın sesiyle Türkçe seslendirme üretir.", en: "Turkish voiceover that delivers the script in the persona's voice." },
+      whenMissing: { tr: "UGC videolarında Türkçe seslendirme üretilemez.", en: "UGC videos can't get a Turkish voiceover." },
+    },
+    {
+      key: "fal", name: "fal.ai", envVars: ["FAL_KEY"], required: false,
+      docsUrl: "https://fal.ai/dashboard/keys", managedViaVault: true,
+      purpose: { tr: "UGC klibi için dudak senkronu, ve prompttan gönderi görseli üretir.", en: "Lipsync for the UGC clip, and post images from a prompt." },
+      whenMissing: { tr: "Dudak senkronu ve prompttan görsel üretimi çalışmaz.", en: "Lipsync and prompt-to-image generation stop working." },
+    },
+    {
+      key: "voyage", name: "Voyage AI", envVars: ["VOYAGE_API_KEY"], required: false,
+      docsUrl: "https://dashboard.voyageai.com/api-keys", managedViaVault: true,
+      purpose: { tr: "Tekrar/benzerlik kontrolü için embedding üretir. Tam 1024 boyut dönmeli (§4c / D3).", en: "Embeddings for duplicate detection. Must return exactly 1024 dimensions (§4c / D3)." },
+      whenMissing: { tr: "Tekrar/benzerlik kontrolü ve devam zinciri önerileri çalışmaz.", en: "Duplicate/similarity checks and continuation-chain suggestions stop working." },
+    },
+    {
+      key: "instagram", name: "Instagram", envVars: ["INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET"], required: false,
+      docsUrl: "https://developers.facebook.com/apps", managedViaVault: false,
+      purpose: { tr: "Yayın ve metrik toplama. Marka bazlı uygulama kimliği, env yalnızca yedek (D2).", en: "Publishing and insights. Per-brand app credentials, with the env vars as fallback only (D2)." },
+      whenMissing: { tr: "Instagram'a otomatik yayın ve metrik toplama çalışmaz.", en: "Automatic Instagram publishing and metrics collection stop working." },
+    },
+    {
+      key: "supabase", name: "Supabase", envVars: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"], required: true,
+      docsUrl: "https://supabase.com/dashboard/project/_/settings/api", managedViaVault: false,
+      purpose: { tr: "Tüm ürün için veritabanı, kimlik doğrulama ve medya depolama.", en: "Database, auth and media storage for the whole product." },
+    },
   ],
 };
 
