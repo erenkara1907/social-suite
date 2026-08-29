@@ -890,6 +890,8 @@ declare
   v_user_id  uuid := auth.uid();
   v_existing public.jobs;
   v_new      public.jobs;
+  v_limit    int;
+  v_window   int;
 begin
   if v_user_id is null then
     raise exception 'enqueue_job: oturum yok' using errcode = '28000';
@@ -905,6 +907,39 @@ begin
      limit 1;
     if found then
       return v_existing;
+    end if;
+  end if;
+
+  /* ── Hız sınırı — §12 adım 13 FAZ D (§8.7) ─────────────────────────────
+     Yalnızca AI çağrısı TETİKLEYEN iş tipleri sayılır: plan_generate,
+     caption_write, ugc_pipeline. Diğerleri (publish, metrics_collect,
+     media_poll, token_refresh, embed_backfill, noop_test) müşterinin AI
+     faturasını büyütmüyor. Dedupe kısa devresinden SONRA çalışır — aynı
+     işin iki kez tıklanması var olan satırı döndürür, sayaç ikinci kez
+     artmaz. Marka bazlı sayaç: bucket brand_id taşır, `rate_limit_hit()`
+     pencereyi kendi içinde hizalar (aynı pencerede yeni istek geldikçe
+     sıfırdan başlamaz, dolunca doğal olarak sıfırlanır). */
+  if p_kind in ('plan_generate', 'caption_write', 'ugc_pipeline') then
+    select rlp.limit_count, rlp.window_seconds into v_limit, v_window
+      from public.rate_limit_policies rlp
+     where rlp.brand_id = p_brand_id and rlp.kind = p_kind;
+
+    if not found then
+      -- Başlangıç değerleri — BIRLESIM_PLANI §8.7, ⚠ KALİBRE EDİLMEDİ.
+      v_limit := case p_kind
+        when 'plan_generate' then 10
+        when 'caption_write' then 100
+        when 'ugc_pipeline'  then 20
+      end;
+      v_window := case p_kind
+        when 'ugc_pipeline' then 86400   -- günlük
+        else 3600                        -- saatlik
+      end;
+    end if;
+
+    if not public.rate_limit_hit('rl:' || p_kind || ':' || p_brand_id::text, v_limit, v_window) then
+      raise exception 'enqueue_job: hiz siniri asildi (% icin %/%sn)', p_kind, v_limit, v_window
+        using errcode = 'RLIM1';
     end if;
   end if;
 
@@ -1098,6 +1133,23 @@ end $$;
 
 revoke all on function public.rate_limit_hit(text, int, int) from public, authenticated;
 
+/* Marka bazlı ÖZEL limit — §12 adım 13 FAZ D. Satır yoksa `enqueue_job()`
+   aşağıdaki (kalibre edilmemiş, §8.7'nin başlangıç değerleri) varsayılana
+   düşer. "Müşteri bazında farklı olabilir" gereksinimi burada karşılanıyor:
+   bir müşterinin planını yükseltmek/düşürmek tek bir UPSERT, kod değişikliği
+   gerektirmiyor. RLS açık + politika yok — diğer ikisiyle aynı desen,
+   yalnızca service-role/SECURITY DEFINER içeriden okur. */
+create table if not exists public.rate_limit_policies (
+  brand_id      uuid not null references public.brands on delete cascade,
+  kind          text not null,
+  limit_count   int not null,
+  window_seconds int not null,
+  primary key (brand_id, kind)
+);
+
+alter table public.rate_limit_policies enable row level security;
+-- Politika YOK. Bilinçli.
+
 
 -- ═════════════════════════════════════════════════════════════════════════════
 --  8. DEPOLAMA — siraya/003-instagram.sql:48-71
@@ -1137,9 +1189,11 @@ create policy "public media read" on storage.objects
 --  Fark: sahiplik artık user_id değil, owns_brand(brand_id). Organizasyon
 --  katmanı geldiğinde SADECE owns_brand() gövdesi değişir.
 --
---  İki tablo bilinçli olarak POLİTİKASIZ (siraya/003-instagram.sql:37 deseni):
---  channel_credentials ve provider_credentials. RLS açık + sıfır politika =
---  hiçbir tarayıcı oturumu token/anahtar okuyamaz; yalnızca service-role.
+--  Dört tablo bilinçli olarak POLİTİKASIZ (siraya/003-instagram.sql:37
+--  deseni): channel_credentials, provider_credentials, rate_limit_counters,
+--  rate_limit_policies (§12 adım 13 FAZ D). RLS açık + sıfır politika =
+--  hiçbir tarayıcı oturumu token/anahtar/sayaç okuyamaz; yalnızca
+--  service-role ya da SECURITY DEFINER fonksiyonların içeriden erişimi.
 -- ═════════════════════════════════════════════════════════════════════════════
 
 alter table public.profiles        enable row level security;

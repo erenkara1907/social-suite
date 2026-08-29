@@ -75,8 +75,9 @@ function toQueuedJob(row: EnqueueJobRpcRow): QueuedJob {
   };
 }
 
-/** Postgres SQLSTATE → `ApiErrorCode`. `enqueue_job()`'un fırlattığı iki
- *  errcode burada karşılanır; geri kalanı (ağ, beklenmeyen) `upstream_error`. */
+/** Postgres SQLSTATE → `ApiErrorCode`. `enqueue_job()`'un fırlattığı üç
+ *  errcode burada karşılanır (§12 adım 13 FAZ D'de `RLIM1` eklendi);
+ *  geri kalanı (ağ, beklenmeyen) `upstream_error`. */
 function mapPostgresError(code: string | undefined): ApiErrorCode {
   switch (code) {
     case "28000": // "enqueue_job: oturum yok"
@@ -85,6 +86,11 @@ function mapPostgresError(code: string | undefined): ApiErrorCode {
       return "forbidden";
     case "23514": // check kısıtı (örn. geçersiz kind) — client yine de yanlış bir şey gönderdi
       return "invalid_input";
+    // §12 adım 13 FAZ D — özel SQLSTATE, gerçek bir Postgres kodu değil
+    // (rate limit için standart bir sınıf yok). "enqueue_job: hiz siniri
+    // asildi" mesajını taşır — HTTP_STATUS_BY_CODE zaten 429'a eşliyor.
+    case "RLIM1":
+      return "rate_limited";
     default:
       return "upstream_error";
   }
