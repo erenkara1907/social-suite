@@ -1,23 +1,20 @@
-import appConfig from "@/app.config";
+import { redirect } from "next/navigation";
+import { getUser } from "@/lib/supabase/server";
+import { DEFAULT_LANDING } from "@/lib/routes";
 
 /**
- * Placeholder home page — BIRLESIM_PLANI §12 adım 1 ("`/` boş sayfa render
- * eder"). The real landing page is written from scratch later; all three
- * source projects' marketing pages were discarded (§7.3).
+ * Kök adres — BIRLESIM_PLANI §12 adım 11 (A0).
  *
- * It lives under (marketing) rather than at app/page.tsx so the real landing
- * page can replace it in place — two files both resolving to `/` would be a
- * Next.js build error.
+ * Adım 1'in iskelet placeholder'ının yerini aldı: `/` artık bir ekran değil,
+ * bir yönlendirme. Oturum varsa DEFAULT_LANDING'e, yoksa /login'e düşer —
+ * proxy.ts'in `(app)` guard'ıyla aynı karar mantığı (`getUser()`, `getSession()`
+ * değil — bkz. `proxy.ts:64-66`).
+ *
+ * (marketing) grubunda kalmaya devam ediyor: gerçek landing sayfası FAZ 2'nin
+ * işi ve bu dosyanın üstüne yazılacak — iki dosyanın birden `/`'e çözülmesi
+ * bir Next.js derleme hatası olurdu.
  */
-export default function Home() {
-  return (
-    <main className="grid min-h-dvh place-items-center p-8">
-      <div className="text-center">
-        <p className="label-mono text-muted-foreground">iskelet</p>
-        <h1 className="mt-3 font-display text-4xl tracking-tight">
-          {appConfig.name}
-        </h1>
-      </div>
-    </main>
-  );
+export default async function Home() {
+  const user = await getUser();
+  redirect(user ? DEFAULT_LANDING : "/login");
 }
