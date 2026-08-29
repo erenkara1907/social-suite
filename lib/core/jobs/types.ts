@@ -32,7 +32,14 @@ export const JOB_KINDS = [
 
 export type JobKind = (typeof JOB_KINDS)[number];
 
-/** `supabase/00_schema.sql` `jobs.state` CHECK'iyle birebir. "Ölü mektup" = `dead`. */
+/**
+ * `supabase/00_schema.sql` `jobs.state` CHECK'iyle birebir. "Ölü mektup" = `dead`.
+ *
+ * ⚠ `failed` şemada VAR ama worker (`lib/server/jobs/worker.ts`) onu hiç
+ * ÜRETMİYOR — geçici hata `queued`'e (backoff'la), kalıcı/tükenmiş hata
+ * doğrudan `dead`'e gider. Bilinçli bırakılmış, gözlenmeyen bir ara durum
+ * (§12 adım 13 FAZ A2, `supabase/00_schema.sql`'in aynı yorumu).
+ */
 export const JOB_STATES = ["queued", "running", "succeeded", "failed", "dead"] as const;
 export type JobState = (typeof JOB_STATES)[number];
 
@@ -148,6 +155,25 @@ export interface JobRetryPolicy {
   /** Üstel geri çekilmenin taban gecikmesi — gerçek gecikme
    *  `backoffBaseMs * 2^(attempts-1)` (bkz. `lib/server/jobs/worker.ts`). */
   backoffBaseMs: number;
+  /**
+   * §12 adım 13 FAZ A — `sm-reaper`'ın "takılı `running`" süpürücüsü bu satırı
+   * kullanır. Süreç TAMAMEN çökerse (Vercel fonksiyon sonlandırması, OOM)
+   * `processJob`'un try/catch'i hiç çalışmaz, satır `running`'de askıda kalır.
+   * Süpürücü onu bulunca:
+   *   - `"requeue"` — `queued`'a döner (locked_at temizlenir, backoff YOK —
+   *     zaten en az `STUCK_THRESHOLD_MS` beklemiş). Varsayılan: işlemin
+   *     çöktüğü an bilinmiyor demek işin BAŞLAMADIĞI da olabilir, yeniden
+   *     denemek güvenli sayılır (dedupe_key + içerik kilidi ikinci savunma).
+   *   - `"dead"` — insan/adım-20 kararına bırakılır. Yalnızca `ugc_pipeline`:
+   *     dispatch deseninde (§4d) çökme ANI vendor çağrısından ÖNCE de SONRA
+   *     da olabilir; sonra olduysa kör bir requeue vendor'ı İKİNCİ KEZ
+   *     tetikleyip krediyi ikiletebilir — bu, kuyruk katmanının kendi
+   *     başına ayırt edemeyeceği bir belirsizlik, o yüzden otomatik
+   *     yeniden denemek yerine görünür bir ölü mektup bırakılır.
+   * Tükenmiş deneme (`attempts >= max_attempts`) bu alandan BAĞIMSIZ olarak
+   * her zaman `dead`'e gider — normal worker akışıyla aynı kural.
+   */
+  reaperOnStuck: "requeue" | "dead";
 }
 
 /**
@@ -167,13 +193,17 @@ export interface JobRetryPolicy {
  *  - `noop_test` gerçek iş yapmaz; politika testte kullanılan sabit değer.
  */
 export const JOB_RETRY_POLICY: Record<JobKind, JobRetryPolicy> = {
-  plan_generate: { maxAttempts: 3, expectedDurationMs: 20_000, backoffBaseMs: 5_000 },
-  caption_write: { maxAttempts: 3, expectedDurationMs: 8_000, backoffBaseMs: 3_000 },
-  ugc_pipeline: { maxAttempts: 2, expectedDurationMs: 180_000, backoffBaseMs: 30_000 },
-  media_poll: { maxAttempts: 5, expectedDurationMs: 3_000, backoffBaseMs: 10_000 },
-  publish: { maxAttempts: 3, expectedDurationMs: 10_000, backoffBaseMs: 15_000 },
-  metrics_collect: { maxAttempts: 2, expectedDurationMs: 15_000, backoffBaseMs: 20_000 },
-  token_refresh: { maxAttempts: 2, expectedDurationMs: 5_000, backoffBaseMs: 30_000 },
-  embed_backfill: { maxAttempts: 5, expectedDurationMs: 4_000, backoffBaseMs: 5_000 },
-  noop_test: { maxAttempts: 3, expectedDurationMs: 100, backoffBaseMs: 1_000 },
+  plan_generate: { maxAttempts: 3, expectedDurationMs: 20_000, backoffBaseMs: 5_000, reaperOnStuck: "requeue" },
+  caption_write: { maxAttempts: 3, expectedDurationMs: 8_000, backoffBaseMs: 3_000, reaperOnStuck: "requeue" },
+  // ⚠ tek istisna — gerekçe JobRetryPolicy.reaperOnStuck docstring'inde.
+  ugc_pipeline: { maxAttempts: 2, expectedDurationMs: 180_000, backoffBaseMs: 30_000, reaperOnStuck: "dead" },
+  media_poll: { maxAttempts: 5, expectedDurationMs: 3_000, backoffBaseMs: 10_000, reaperOnStuck: "requeue" },
+  // publish: dedupe_key + content_items.status koşullu geçişi (§4a) zaten
+  // ikinci katman — takılı bir publish'i requeue etmek bu savunmanın
+  // ARKASINDA kalır, ugc_pipeline'ın vendor-çağrısı belirsizliği yok.
+  publish: { maxAttempts: 3, expectedDurationMs: 10_000, backoffBaseMs: 15_000, reaperOnStuck: "requeue" },
+  metrics_collect: { maxAttempts: 2, expectedDurationMs: 15_000, backoffBaseMs: 20_000, reaperOnStuck: "requeue" },
+  token_refresh: { maxAttempts: 2, expectedDurationMs: 5_000, backoffBaseMs: 30_000, reaperOnStuck: "requeue" },
+  embed_backfill: { maxAttempts: 5, expectedDurationMs: 4_000, backoffBaseMs: 5_000, reaperOnStuck: "requeue" },
+  noop_test: { maxAttempts: 3, expectedDurationMs: 100, backoffBaseMs: 1_000, reaperOnStuck: "requeue" },
 };

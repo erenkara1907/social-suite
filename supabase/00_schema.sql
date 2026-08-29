@@ -610,6 +610,13 @@ create table if not exists public.jobs (
                   'noop_test'
                 )),
   payload       jsonb not null default '{}'::jsonb,
+  -- ⚠ §12 adım 13 FAZ A2 — 'failed' CHECK'te DURUYOR ama worker
+  -- (lib/server/jobs/worker.ts) onu hiç ÜRETMİYOR: geçici hata doğrudan
+  -- 'queued'e (backoff ile) döner, kalıcı/tükenmiş hata doğrudan 'dead'e
+  -- gider. Bilinçli: 'failed' ileride bir handler'ın "bu deneme başarısız
+  -- ama henüz karar verilmedi" gibi AYRI bir ara anlam için ayırdığı bir
+  -- yer tutucu. Şimdi çıkarmak (CHECK'i daraltmak) hiçbir davranışı
+  -- değiştirmez ama geri dönüşü olan bir kapıyı kapatır — tutuldu.
   state         text not null default 'queued' check (state in
                   ('queued', 'running', 'succeeded', 'failed', 'dead')),
   priority      int not null default 100,         -- küçük = önce
@@ -643,6 +650,14 @@ create unique index if not exists jobs_dedupe_idx
 create index if not exists jobs_pickup_idx
   on public.jobs (state, run_after, priority)
   where state = 'queued';
+
+-- Takılı iş süpürücüsü (§12 adım 13 FAZ A) — sm-worker'ın kendi kapanışı
+-- 'running'i normal akışta hiç bırakmaz (requeueUnprocessed / processJob her
+-- zaman bir durum geçişiyle biter); bu yalnızca SÜREÇ TAMAMEN çökerse (Vercel
+-- fonksiyon sonlandırması, OOM) askıda kalan satırları bulmak için.
+create index if not exists jobs_stuck_idx
+  on public.jobs (state, locked_at)
+  where state = 'running';
 
 drop trigger if exists jobs_touch on public.jobs;
 create trigger jobs_touch before update on public.jobs

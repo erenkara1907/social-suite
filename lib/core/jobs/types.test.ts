@@ -48,4 +48,13 @@ describe("JOB_RETRY_POLICY", () => {
       expect(ugc.maxAttempts).toBeLessThanOrEqual(JOB_RETRY_POLICY[kind].maxAttempts);
     }
   });
+
+  it("§12 adım 13 FAZ A — yalnızca ugc_pipeline takılı kalınca dead'e gider", () => {
+    // Vendor çağrısının çökme ANINDAN önce mi sonra mı yapıldığı bilinmiyor;
+    // kör bir requeue krediyi ikiletebilir (bkz. reaperOnStuck docstring'i).
+    for (const kind of JOB_KINDS) {
+      const expected = kind === "ugc_pipeline" ? "dead" : "requeue";
+      expect(JOB_RETRY_POLICY[kind].reaperOnStuck).toBe(expected);
+    }
+  });
 });
