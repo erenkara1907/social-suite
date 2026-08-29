@@ -9,7 +9,7 @@
  * Field names match the snake_case-free columns in
  * supabase/00_schema.sql (brands) (they are already single words).
  */
-import type { L } from "@/lib/core/types";
+import type { L, Lang } from "@/lib/core/types";
 
 export interface Brand {
   name: string;
@@ -167,12 +167,20 @@ export function parseBrand(raw: unknown): Brand | null {
   return brand;
 }
 
+const CONTENT_LANGUAGE_NAME: Record<Lang, string> = { tr: "Turkish", en: "English" };
+
 /**
  * The brand as the model sees it. Empty fields are dropped rather than sent as
  * blanks — a labelled empty line reads as "we have none of this" and drags the
  * output down.
+ *
+ * ⭐ adım 10 A1 — `contentLanguage` is separate from `Brand`'s eight text
+ * fields (it isn't user prose, it's a fixed choice) and separate from the
+ * interface language: a customer can run the dashboard in English and still
+ * want Turkish content. When given, it's the LAST line — this is the one
+ * instruction adım 14's live callers must not drop when they build a prompt.
  */
-export function toPromptBlock(brand: Brand | null): string {
+export function toPromptBlock(brand: Brand | null, contentLanguage?: Lang): string {
   if (!isBrandUsable(brand)) return "";
 
   const lines: [string, string][] = [
@@ -184,6 +192,7 @@ export function toPromptBlock(brand: Brand | null): string {
     ["Brand voice", brand.voice],
     ["Keywords and hashtags to favour", brand.keywords],
     ["Links", brand.links],
+    ...(contentLanguage ? [["Content language", CONTENT_LANGUAGE_NAME[contentLanguage]] as [string, string]] : []),
   ];
 
   return [

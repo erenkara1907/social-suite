@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { BRAND_LABEL, BRAND_PLACEHOLDER, MAX_LENGTH } from "@/lib/core/brand/types";
 import { COMMON_TIMEZONES } from "@/lib/core/tz";
+import { CONTENT_LANGUAGE_LABEL, LANGS } from "@/lib/core/types";
 import { saveBrandAction, type SettingsState } from "@/app/(app)/settings/actions";
 import type { OwnedBrand } from "@/lib/server/auth";
 
@@ -74,6 +75,23 @@ export function SettingsBrandForm({ brand, completion }: { brand: OwnedBrand; co
                   )}
                   {COMMON_TIMEZONES.map((tz) => (
                     <option key={tz} value={tz}>{tz}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="content_language" title={ui.fieldContentLanguageHint}>
+                  {ui.fieldContentLanguageLabel}
+                </Label>
+                <select
+                  id="content_language"
+                  name="content_language"
+                  required
+                  defaultValue={brand.contentLanguage}
+                  className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring transition-colors"
+                >
+                  {LANGS.map((code) => (
+                    <option key={code} value={code}>{t(CONTENT_LANGUAGE_LABEL[code])}</option>
                   ))}
                 </select>
               </div>

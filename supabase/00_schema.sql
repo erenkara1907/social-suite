@@ -112,10 +112,27 @@ create table if not exists public.brands (
   links       text not null default '',
   -- threadly/lib/brand/types.ts:127 toPromptBlock() bu 8 alanı okur.
   timezone    text not null default 'Europe/Istanbul',
+  -- adım 10 A1 — İÇERİK dili, ARAYÜZ dili değil. Müşteri İngilizce arayüzle
+  -- Türkçe içerik üretebilir; bu yüzden localStorage'daki `sm:lang` tercihi
+  -- (istemci, SSR'ın bilemediği) değil, markanın kendi özelliği bu kolon
+  -- karar veriyor. `toPromptBlock` bunu istem bloğuna taşıyor; adım 14'ün
+  -- PlannerPort/CopyPort.live'ı bunu okuyacak.
+  content_language text not null default 'tr',
   is_active   boolean not null default true,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+/* Yakınsama — brands tablosu eski şekliyle zaten varsa (create table if not
+   exists onu olduğu gibi bırakır) content_language'i ekler ve CHECK'ini
+   tazeler. provider_credentials'taki D2 deseninin aynısı (yukarıda). */
+alter table public.brands
+  add column if not exists content_language text not null default 'tr';
+
+alter table public.brands
+  drop constraint if exists brands_content_language_check;
+alter table public.brands
+  add constraint brands_content_language_check check (content_language in ('tr', 'en'));
 
 create index if not exists brands_owner_idx on public.brands (owner_id, created_at desc);
 

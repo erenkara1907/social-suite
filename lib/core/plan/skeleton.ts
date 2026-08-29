@@ -127,7 +127,7 @@ const SYSTEM_PROMPT = [
 /* ── Prompts ──────────────────────────────────────────────────────────────── */
 
 function header(input: SkeletonInput): string[] {
-  const brandBlock = toPromptBlock(input.brand);
+  const brandBlock = toPromptBlock(input.brand, input.lang);
   return [
     `Write every title and hook in ${input.lang === "tr" ? "Turkish" : "English"}.`,
     "",

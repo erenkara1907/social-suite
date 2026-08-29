@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Brand } from "@/lib/core/brand/types";
+import type { Lang } from "@/lib/core/types";
 
 /**
  * Sunucu tarafı guard'ları — BIRLESIM_PLANI §12 adım 7.
@@ -19,10 +20,14 @@ import type { Brand } from "@/lib/core/brand/types";
  * proxy `matcher`'ı bir rotayı kaçırırsa sayfa yine de korunur.
  */
 
-/** `brands` satırı — `Brand` profil alanları + sahiplik/kimlik kolonları. */
+/** `brands` satırı — `Brand` profil alanları + sahiplik/kimlik kolonları.
+ *  ⭐ adım 10 A1 — `contentLanguage` `timezone`'un tam yanında yaşıyor: ikisi
+ *  de kullanıcı tercihi değil, marka özelliği. `/plan` bunu okur, ARAYÜZ
+ *  dilini (`useLang()`, localStorage) DEĞİL. */
 export interface OwnedBrand extends Brand {
   id: string;
   timezone: string;
+  contentLanguage: Lang;
   isActive: boolean;
 }
 
@@ -38,11 +43,12 @@ interface BrandRow {
   keywords: string;
   links: string;
   timezone: string;
+  content_language: Lang;
   is_active: boolean;
 }
 
 const BRAND_COLUMNS =
-  "id,name,industry,description,products,audience,voice,keywords,links,timezone,is_active";
+  "id,name,industry,description,products,audience,voice,keywords,links,timezone,content_language,is_active";
 
 function toOwnedBrand(row: BrandRow): OwnedBrand {
   return {
@@ -56,6 +62,7 @@ function toOwnedBrand(row: BrandRow): OwnedBrand {
     keywords: row.keywords,
     links: row.links,
     timezone: row.timezone,
+    contentLanguage: row.content_language,
     isActive: row.is_active,
   };
 }

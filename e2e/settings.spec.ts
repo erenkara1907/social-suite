@@ -48,6 +48,8 @@ test.describe("settings — marka profili", () => {
     await page.locator("#voice").fill(values.voice);
     await page.locator("#links").fill(values.links);
     await page.selectOption("#timezone", "America/New_York");
+    // ⭐ adım 10 A1 — içerik dili marka alanı, arayüz dilinden ayrı.
+    await page.selectOption("#content_language", "en");
 
     // ⚠ `button[type="submit"]` belirsiz — sidebar'ın "Çıkış yap" düğmesi de
     // kendi formunda submit tipinde. Metne göre ayırt ediliyor.
@@ -75,10 +77,19 @@ test.describe("settings — marka profili", () => {
     await expect(page.locator("#voice")).toHaveValue(values.voice);
     await expect(page.locator("#links")).toHaveValue(values.links);
     await expect(page.locator("#timezone")).toHaveValue("America/New_York");
+    await expect(page.locator("#content_language")).toHaveValue("en");
 
     // ⭐ B4 — sekiz alandan altısı dolu (name, industry, description, audience,
     // voice, links; products/keywords boş kaldı) → tamamlanma %75 görünmeli.
     await expect(page.getByText(/75%/)).toBeVisible();
+
+    // ⭐ adım 10 A1 — /plan bu markanın content_language'ını okuyor, ARAYÜZ
+    // dilini değil. Bu oturumun arayüz dili Türkçe kalıyor (localStorage
+    // hiç değiştirilmedi) — "İngilizce" kelimesinin kendisi bunun kanıtı:
+    // etiket Türkçe arayüzde render ediliyor ama ADLANDIRDIĞI değer markanın
+    // az önce "en" olarak kaydedilen content_language'ı.
+    await page.goto("/plan");
+    await expect(page.getByText(/İçerik dili · İngilizce/)).toBeVisible();
   });
 
   test("⭐ RLS kanıtı — başka bir kullanıcının markasına yazma denemesi tutmaz", async () => {

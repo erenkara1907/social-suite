@@ -10,7 +10,7 @@ import { Icon } from "@/components/ui/icon";
 import { Label, Textarea } from "@/components/ui/input";
 import { ChainCard, type ChainGroup } from "@/components/app/queue-view";
 import { cn } from "@/lib/utils";
-import { PLATFORM_META, type ContentItemRow } from "@/lib/core/types";
+import { CONTENT_LANGUAGE_LABEL, PLATFORM_META, type ContentItemRow, type Lang } from "@/lib/core/types";
 import type { buildMonthCells, buildWeek } from "@/lib/core/derive/calendar";
 import type { PlanHorizon } from "@/lib/core/plan/types";
 
@@ -70,8 +70,16 @@ function BrandWarning({ completion }: { completion: number }) {
 }
 
 /** C5 — tema + üret formu. Demo modda TAMAMEN devre dışı, sahte üretim yok. */
-function GenerateForm({ defaultTheme, disabled }: { defaultTheme: string; disabled: boolean }) {
-  const { ui } = useLang();
+function GenerateForm({
+  defaultTheme,
+  disabled,
+  contentLanguage,
+}: {
+  defaultTheme: string;
+  disabled: boolean;
+  contentLanguage: Lang;
+}) {
+  const { ui, t } = useLang();
   return (
     <Card>
       <CardHeader>
@@ -79,7 +87,14 @@ function GenerateForm({ defaultTheme, disabled }: { defaultTheme: string; disabl
       </CardHeader>
       <CardContent className="space-y-3" title={disabled ? ui.planGenerateDisabledHint : undefined}>
         <div className="space-y-1.5">
-          <Label htmlFor="theme">{ui.planThemeLabel}</Label>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label htmlFor="theme">{ui.planThemeLabel}</Label>
+            {/* ⭐ adım 10 A1 — İÇERİK dili marka alanından; arayüz dilinden
+                bağımsız (bir arayüz İngilizce iken bile içerik Türkçe olabilir). */}
+            <span className="label-mono text-muted-foreground">
+              {ui.planContentLanguageLabel} · {t(CONTENT_LANGUAGE_LABEL[contentLanguage])}
+            </span>
+          </div>
           <Textarea id="theme" rows={2} disabled={disabled} defaultValue={defaultTheme} placeholder={ui.planThemePlaceholder} />
         </div>
         <Button type="button" disabled className="gap-2">
@@ -269,6 +284,7 @@ export function PlanView({
   completion,
   generateDisabled,
   defaultTheme,
+  contentLanguage,
 }: {
   horizonDays: PlanHorizon;
   planTitle: string;
@@ -279,6 +295,7 @@ export function PlanView({
   completion: number;
   generateDisabled: boolean;
   defaultTheme: string;
+  contentLanguage: Lang;
 }) {
   const { ui } = useLang();
 
@@ -297,7 +314,7 @@ export function PlanView({
         <HorizonToggle horizonDays={horizonDays} />
       </div>
 
-      <GenerateForm defaultTheme={defaultTheme} disabled={generateDisabled} />
+      <GenerateForm defaultTheme={defaultTheme} disabled={generateDisabled} contentLanguage={contentLanguage} />
 
       <Card>
         <CardContent className="pt-5">

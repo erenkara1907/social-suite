@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireBrand } from "@/lib/server/auth";
 import { BRAND_FIELDS, parseBrand, validateLinks } from "@/lib/core/brand/types";
 import { isValidTimeZone } from "@/lib/core/tz";
+import { LANGS, type Lang } from "@/lib/core/types";
 
 /**
  * BIRLESIM_PLANI §12 adım 9 B3 — marka profili formunun tek yazma noktası.
@@ -20,6 +21,7 @@ export interface SettingsState {
     | "errBrandFieldTooLong"
     | "errBrandLinksInvalid"
     | "errBrandTimezoneInvalid"
+    | "errBrandContentLanguageInvalid"
     | "errBrandSaveFailed"
     | null;
   /** Değişince istemci "kaydedildi" mesajını gösterir — her başarılı kayıtta yeni bir değer. */
@@ -49,10 +51,20 @@ export async function saveBrandAction(
     return { errorKey: "errBrandTimezoneInvalid", savedAt: null };
   }
 
+  // ⭐ adım 10 A1 — content_language, timezone'un tam yanında: bir <select>
+  // olduğu için (link listesi gibi serbest metin değil) tek geçerlilik kuralı
+  // LANGS üyeliği. `<select>` yalnızca bu iki seçeneği sunar; bu kontrol
+  // formu atlayan doğrudan bir POST'a karşı.
+  const contentLanguageRaw = String(formData.get("content_language") ?? "").trim();
+  if (!(LANGS as readonly string[]).includes(contentLanguageRaw)) {
+    return { errorKey: "errBrandContentLanguageInvalid", savedAt: null };
+  }
+  const contentLanguage = contentLanguageRaw as Lang;
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("brands")
-    .update({ ...brand, timezone })
+    .update({ ...brand, timezone, content_language: contentLanguage })
     .eq("id", owned.id);
 
   if (error) return { errorKey: "errBrandSaveFailed", savedAt: null };

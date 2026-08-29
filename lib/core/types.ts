@@ -21,6 +21,16 @@ export interface L {
 export const LANGS = ["tr", "en"] as const;
 export type Lang = (typeof LANGS)[number];
 
+/**
+ * ⭐ adım 10 A1 — bir `Lang` değerinin görünen adı, arayüz dilinden BAĞIMSIZ.
+ * `brand.contentLanguage`'ı ekranda etiketlerken kullanılır (`/plan`); arayüz
+ * İngilizce iken bile içerik dili "Türkçe" yazabilmeli.
+ */
+export const CONTENT_LANGUAGE_LABEL: Record<Lang, L> = {
+  tr: { tr: "Türkçe", en: "Turkish" },
+  en: { tr: "İngilizce", en: "English" },
+};
+
 /* ── Platform ────────────────────────────────────────────────────────────── */
 
 /**

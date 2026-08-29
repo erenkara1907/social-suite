@@ -143,6 +143,28 @@ describe("toPromptBlock", () => {
   it("sondaki yeni satırla bitmez", () => {
     expect(toPromptBlock(FULL).endsWith("\n")).toBe(false);
   });
+
+  describe("⭐ adım 10 A1 — contentLanguage parametresi", () => {
+    it("ikinci parametre verilmezse dil satırı EKLENMEZ — geriye dönük uyumluluk", () => {
+      expect(toPromptBlock(FULL)).not.toContain("Content language");
+    });
+
+    it("'tr' verilince son satır 'Content language: Turkish' olur", () => {
+      const block = toPromptBlock(FULL, "tr");
+      const lines = block.split("\n");
+      expect(lines[lines.length - 1]).toBe("Content language: Turkish");
+    });
+
+    it("'en' verilince son satır 'Content language: English' olur", () => {
+      const block = toPromptBlock(FULL, "en");
+      const lines = block.split("\n");
+      expect(lines[lines.length - 1]).toBe("Content language: English");
+    });
+
+    it("kullanılamaz marka için contentLanguage verilse bile boş dize kalır", () => {
+      expect(toPromptBlock(EMPTY_BRAND, "tr")).toBe("");
+    });
+  });
 });
 
 describe("⭐ B3 — form → parseBrand → toPromptBlock dönüşüm kaybı yok", () => {

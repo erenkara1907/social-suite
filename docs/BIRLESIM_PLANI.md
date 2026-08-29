@@ -1604,6 +1604,16 @@ girdisi olarak marka profilini okuyacak yol, ki o okuma da modu izlemeli
 "kullanıcı kendi profilini düzenliyor mu" (her zaman gerçek) ile "AI planı
 üretirken hangi markayı okuyor" (moda bağlı) — birbirine karıştırılmadı.
 
+**⭐ İçerik dili (adım 10 A1) — arayüz dili ile içerik dili iki ayrı şeydir.**
+`brands.content_language` (`timezone`'un tam yanında, varsayılan `'tr'`)
+müşterinin panoyu hangi dilde kullandığını değil, AI'ın hangi dilde içerik
+üreteceğini tutar — bir kullanıcı arayüzü İngilizce açıp Türkçe içerik
+üretmek isteyebilir. **Adım 14** `PlannerPort.live`/`CopyPort.live`'ı
+yazarken bu alanı okuyacak; `useLang()`'ın `localStorage` tabanlı arayüz
+tercihini (`sm:lang`) DEĞİL — SSR o tercihi zaten bilemiyordu, bu yüzden
+soru başta yanlış kurulmuştu. `toPromptBlock()` bu alanı ikinci, opsiyonel
+bir parametre olarak taşır (`lib/core/brand/types.ts`).
+
 ### 9.2 FAZ 1 ekran tablosu
 
 | Ekran | Demo kaynağı | Adapter arayüzü | FAZ 2'de bağlanacak servis |

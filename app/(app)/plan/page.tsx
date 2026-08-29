@@ -44,7 +44,10 @@ export default async function Page({
     plannerPort.generate({
       theme: brand.description || brand.name,
       horizonDays,
-      lang: "tr",
+      // ⭐ adım 10 A1 — İÇERİK dili, brand.contentLanguage'dan. Arayüzün
+      // (localStorage `sm:lang`) SSR'ın bilemediği tercihi DEĞİL, markanın
+      // kendi alanı — bkz. docs/BIRLESIM_PLANI.md §9.1.
+      lang: brand.contentLanguage,
       mode: "weekly",
       start: now,
       brand,
@@ -77,6 +80,7 @@ export default async function Page({
       completion={completion}
       generateDisabled={generateDisabled}
       defaultTheme={brand.description || brand.name}
+      contentLanguage={brand.contentLanguage}
     />
   );
 }
