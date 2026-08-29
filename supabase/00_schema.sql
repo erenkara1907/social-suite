@@ -604,7 +604,10 @@ create table if not exists public.jobs (
   kind          text not null check (kind in (
                   'plan_generate', 'caption_write', 'ugc_pipeline',
                   'media_poll', 'publish', 'metrics_collect',
-                  'token_refresh', 'embed_backfill'
+                  'token_refresh', 'embed_backfill',
+                  -- 'noop_test' — §12 adım 12 (FAZ B4): worker döngüsünü dış
+                  -- çağrı yapmadan kanıtlamak için. Gerçek iş yapmaz.
+                  'noop_test'
                 )),
   payload       jsonb not null default '{}'::jsonb,
   state         text not null default 'queued' check (state in
@@ -621,6 +624,17 @@ create table if not exists public.jobs (
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
+
+-- Yakınsama — tablo eski şekliyle zaten varsa (adım 2'de kurulmuş, 'noop_test'
+-- yokken) CHECK listesini tazeler. §12 adım 12 A1, D2'nin deseni.
+alter table public.jobs
+  drop constraint if exists jobs_kind_check;
+alter table public.jobs
+  add constraint jobs_kind_check check (kind in (
+    'plan_generate', 'caption_write', 'ugc_pipeline',
+    'media_poll', 'publish', 'metrics_collect',
+    'token_refresh', 'embed_backfill', 'noop_test'
+  ));
 
 create unique index if not exists jobs_dedupe_idx
   on public.jobs (dedupe_key)
@@ -653,6 +667,74 @@ begin
 end $$;
 
 revoke all on function public.claim_jobs(text, int) from public, authenticated;
+
+/* İşe ekleme — §12 adım 12 A2. Kullanıcının KENDİ oturumuyla çağrılır (anon
+   key + cookie, service-role DEĞİL — lib/server/README.md "üç yer" kuralı
+   enqueue'yi kapsamıyor). SECURITY DEFINER olmasının tek sebebi: 'own jobs
+   read' politikası yalnızca SELECT açıyor, `jobs` üzerinde authenticated'a
+   hiç INSERT izni yok ("kuyruğa yalnızca sunucu ekler" — §5 yorumu). Bu
+   fonksiyon o "sunucu" kapısı: sahiplik owns_brand() ile DOĞRULANIR, sonra
+   DEFINER yetkisiyle satır yazılır.
+
+   İdempotency: `p_dedupe_key` verilmişse ve aynı anahtarla queued/running bir
+   satır zaten varsa, yeni satır AÇILMAZ — var olan döner. `jobs_dedupe_idx`
+   (yukarıda) bunu eşzamanlı çağrılarda da garanti eder; `unique_violation`
+   yakalanıp aynı şekilde var olan satıra düşülür. */
+create or replace function public.enqueue_job(
+  p_brand_id     uuid,
+  p_kind         text,
+  p_payload      jsonb default '{}'::jsonb,
+  p_priority     int default 100,
+  p_run_after    timestamptz default now(),
+  p_max_attempts int default 5,
+  p_dedupe_key   text default null
+)
+returns public.jobs language plpgsql security definer set search_path = public as $$
+declare
+  v_user_id  uuid := auth.uid();
+  v_existing public.jobs;
+  v_new      public.jobs;
+begin
+  if v_user_id is null then
+    raise exception 'enqueue_job: oturum yok' using errcode = '28000';
+  end if;
+
+  if p_brand_id is null or not public.owns_brand(p_brand_id) then
+    raise exception 'enqueue_job: marka sahibi değil' using errcode = '42501';
+  end if;
+
+  if p_dedupe_key is not null then
+    select * into v_existing from public.jobs
+     where dedupe_key = p_dedupe_key and state in ('queued', 'running')
+     limit 1;
+    if found then
+      return v_existing;
+    end if;
+  end if;
+
+  insert into public.jobs (
+    brand_id, user_id, kind, payload, priority, run_after, max_attempts, dedupe_key
+  ) values (
+    p_brand_id, v_user_id, p_kind, p_payload, p_priority, p_run_after, p_max_attempts, p_dedupe_key
+  )
+  returning * into v_new;
+
+  return v_new;
+exception
+  when unique_violation then
+    -- Yarış: iki eşzamanlı çağrı aynı dedupe_key'i aynı anda denedi.
+    -- jobs_dedupe_idx bunu DB seviyesinde engelledi; kaybeden var olanı okur.
+    select * into v_existing from public.jobs
+     where dedupe_key = p_dedupe_key and state in ('queued', 'running')
+     limit 1;
+    if found then
+      return v_existing;
+    end if;
+    raise;
+end $$;
+
+revoke all on function public.enqueue_job(uuid, text, jsonb, int, timestamptz, int, text) from public;
+grant execute on function public.enqueue_job(uuid, text, jsonb, int, timestamptz, int, text) to authenticated;
 
 
 -- ═════════════════════════════════════════════════════════════════════════════

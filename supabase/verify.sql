@@ -74,6 +74,12 @@ select count(*) as media_bucket_politikasi
 select p.proname, p.prosecdef as security_definer
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
  where n.nspname = 'public'
-   and p.proname in ('owns_brand','cron_fire','claim_jobs','rate_limit_hit',
+   and p.proname in ('owns_brand','cron_fire','claim_jobs','enqueue_job','rate_limit_hit',
                      'find_similar_content','handle_new_user','brand_latest_metrics')
  order by p.proname;
+
+\echo ''
+\echo '════ 9. jobs.kind CHECK — noop_test dahil mi (§12 adım 12) ════'
+select conname, pg_get_constraintdef(oid) as tanim
+  from pg_constraint
+ where conrelid = 'public.jobs'::regclass and conname = 'jobs_kind_check';

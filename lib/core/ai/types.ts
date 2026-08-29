@@ -34,6 +34,11 @@ export interface GeneratedImage {
 
 export type ApiErrorCode =
   | "duplicate"
+  // ⭐ §12 adım 12 (iş kuyruğu) — sahiplik reddi. `owns_brand()` false
+  // dönünce (başka markanın işine erişmeye çalışmak) DB `42501`
+  // (insufficient_privilege) fırlatır; PostgREST bunu HTTP 403'e çevirir —
+  // bu kod o anlama gelir. "refused" AI reddi (içerik/politika) için ayrı.
+  | "forbidden"
   | "invalid_input"
   | "missing_key"
   | "not_configured"
@@ -57,6 +62,7 @@ export type ApiResult<T> =
 
 export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   duplicate: 409,
+  forbidden: 403,
   invalid_input: 400,
   missing_key: 503,
   not_configured: 503,
