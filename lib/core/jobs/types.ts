@@ -6,8 +6,8 @@
  * bu adımda kuyruk döngüsünü dış çağrı yapmadan kanıtlamak için eklendi
  * (aşağıda gerekçesi var).
  *
- * Bu dosya saf kalır: Next'e, Supabase'e, `process.env`'e bağımlı değil —
- * `lib/core/README.md`'nin kapı kriteri burada da geçerli.
+ * Bu dosya saf kalır: Next'e, Supabase'e, ortam değişkeni okumaya bağımlı
+ * değil — `lib/core/README.md`'nin kapı kriteri burada da geçerli.
  */
 import type { Lang, MediaJobStep } from "@/lib/core/types";
 import type { PlanHorizon, PlanMode } from "@/lib/core/plan/types";
