@@ -106,8 +106,18 @@ export interface EmbedBackfillPayload {
   contentItemId: string;
 }
 
-/** Hiçbir alan taşımaz — worker döngüsünü kanıtlamak dışında amacı yok. */
-export type NoopTestPayload = Record<string, never>;
+/**
+ * Gerçek iş yapmaz — worker döngüsünü (ve hata yollarını) kanıtlamak
+ * dışında amacı yok. `forceFailure` YALNIZCA testte kullanılır: worker'ın
+ * kalıcı/geçici hata ayrımını ve ölü mektup geçişini dış çağrı yapmadan
+ * tetiklemenin yolu (FAZ B doğrulama: "sürekli patlayan bir iş").
+ */
+export interface NoopTestPayload {
+  forceFailure?: "transient" | "permanent";
+  /** Yalnızca test — worker'ın süre bütçesi/zaman aşımı davranışını dış
+   *  çağrı yapmadan kanıtlamak için yapay bir gecikme (ms). */
+  delayMs?: number;
+}
 
 export interface JobPayloadMap {
   plan_generate: PlanGeneratePayload;
