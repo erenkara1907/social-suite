@@ -1,6 +1,7 @@
 import { isDemo, port } from "@/lib/adapters";
 import { requireBrand } from "@/lib/server/auth";
 import { requestModeOverrides } from "@/lib/server/mode";
+import { getJobsSummary } from "@/lib/server/jobs/status";
 import { buildChains, buildMonthCells, buildWeek } from "@/lib/core/derive/calendar";
 import { skeletonToContentItems } from "@/lib/core/plan/calendar";
 import { brandCompletionPercent } from "@/lib/core/brand/types";
@@ -24,8 +25,12 @@ function parseHorizon(raw: string | undefined): PlanHorizon {
  * ⭐ C5 — sayfa yüklenirken `PlannerPort.generate()` ÇAĞRILIYOR (demo modda
  * `demoPlanSkeleton`, sıfır ağ isteği, `buildSlots()`'un gerçek çıktısı).
  * Bu SAHTE ÜRETİM değil — `/queue`/`/dashboard`'ın demo verisini gösterme
- * biçiminin aynısı. Devre dışı bırakılan şey `PlanView`'daki "yeni tema ile
- * yeniden üret" DÜĞMESİ — o, gerçek AI çağrısı gerektiren adım 14'ün işi.
+ * biçiminin aynısı. Canlı modda bu artık GERÇEK bir Anthropic çağrısı
+ * (`livePlanner.generate()`, adım 14 FAZ C) — kalıcılaşmayan bir ÖNİZLEME;
+ * kalıcı üretim (content_items'a yazma) `PlanView`'daki "Planı üret"
+ * düğmesinin kuyruğa eklediği `plan_generate` işi (adım 14 FAZ D). Bilinçli
+ * maliyet notu: sayfayı her ziyaret bu yüzden gerçek bir çağrı yapar —
+ * ayrıntı `lib/adapters/live/planner.ts` ve adım 14 raporunda.
  */
 export default async function Page({
   searchParams,
@@ -40,7 +45,7 @@ export default async function Page({
   const contentPort = port("content", overrides);
 
   const now = new Date();
-  const [skeletonResult, items] = await Promise.all([
+  const [skeletonResult, items, jobsSummary] = await Promise.all([
     plannerPort.generate({
       theme: brand.description || brand.name,
       horizonDays,
@@ -56,6 +61,7 @@ export default async function Page({
       brandId: brand.id,
     }),
     contentPort.list(),
+    getJobsSummary(),
   ]);
 
   // ⭐ §9.1 "sessiz düşme" değil — üretim gerçekten başarısızsa boş bir plan
@@ -84,6 +90,7 @@ export default async function Page({
       generateDisabled={generateDisabled}
       defaultTheme={brand.description || brand.name}
       contentLanguage={brand.contentLanguage}
+      jobsSummary={jobsSummary}
     />
   );
 }

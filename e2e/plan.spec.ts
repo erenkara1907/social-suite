@@ -18,6 +18,12 @@ test.describe("plan", () => {
 
     await page.goto("/plan");
 
+    // ⭐ adım 14 FAZ D — demo modda "Planı üret" düğmesi devre dışı kalmaya
+    // devam ediyor (gerçek AI çağrısı gerektiren tek düğme). smoke.spec.ts
+    // zaten bu sayfada sıfır dış istek olduğunu doğruluyor; burası düğmenin
+    // GÖRSEL olarak da devre dışı olduğunu kanıtlıyor.
+    await expect(page.getByRole("button", { name: /Planı üret|Generate plan/ })).toBeDisabled();
+
     // ⭐ C1 — 1 haftalık ufuk her zaman 8 slot verir (WEEKLY_TEMPLATE sabit,
     // hangi günden başlarsa başlasın — lib/core/plan/template.test.ts'in
     // "hangi günden başlarsa başlasın 7 günlük ufuk sekiz slot verir" bulgusu).

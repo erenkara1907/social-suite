@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { useLang } from "@/components/i18n/language-provider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,10 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Label, Textarea } from "@/components/ui/input";
 import { ChainCard, type ChainGroup } from "@/components/app/queue-view";
+import { JobsQueueStatus } from "@/components/app/jobs-queue-status";
 import { cn } from "@/lib/utils";
 import { CONTENT_LANGUAGE_LABEL, PLATFORM_META, type ContentItemRow, type Lang } from "@/lib/core/types";
 import type { buildMonthCells, buildWeek } from "@/lib/core/derive/calendar";
 import type { PlanHorizon } from "@/lib/core/plan/types";
+import { AI_ERROR_COPY } from "@/lib/core/ai/error-copy";
+import { generatePlanAction, GENERATE_PLAN_INITIAL_STATE } from "@/app/(app)/plan/actions";
+import type { JobsSummary } from "@/lib/server/jobs/status";
 
 type Week = ReturnType<typeof buildWeek>;
 type Month = ReturnType<typeof buildMonthCells>;
@@ -69,38 +74,67 @@ function BrandWarning({ completion }: { completion: number }) {
   );
 }
 
-/** C5 — tema + üret formu. Demo modda TAMAMEN devre dışı, sahte üretim yok. */
+/**
+ * C5 → adım 14 FAZ D — tema + üret formu. Demo modda TAMAMEN devre dışı
+ * (sahte üretim yok); canlı modda `generatePlanAction`'ı çağırır (kuyruğa
+ * ekler, worker'ı DOĞRUDAN tetiklemez — `app/(app)/plan/actions.ts`'in
+ * yorumu). Hata FAZ B'nin `AI_ERROR_COPY`'siyle gösterilir, `detail`
+ * (raw sağlayıcı metni) HİÇBİR ZAMAN render edilmez.
+ */
 function GenerateForm({
   defaultTheme,
   disabled,
   contentLanguage,
+  horizonDays,
 }: {
   defaultTheme: string;
   disabled: boolean;
   contentLanguage: Lang;
+  horizonDays: PlanHorizon;
 }) {
   const { ui, t } = useLang();
+  const [state, formAction, pending] = useActionState(generatePlanAction, GENERATE_PLAN_INITIAL_STATE);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>{ui.planGenerateCta}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3" title={disabled ? ui.planGenerateDisabledHint : undefined}>
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Label htmlFor="theme">{ui.planThemeLabel}</Label>
-            {/* ⭐ adım 10 A1 — İÇERİK dili marka alanından; arayüz dilinden
-                bağımsız (bir arayüz İngilizce iken bile içerik Türkçe olabilir). */}
-            <span className="label-mono text-muted-foreground">
-              {ui.planContentLanguageLabel} · {t(CONTENT_LANGUAGE_LABEL[contentLanguage])}
-            </span>
+        <form action={formAction} className="space-y-3">
+          <input type="hidden" name="horizonDays" value={horizonDays} />
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label htmlFor="theme">{ui.planThemeLabel}</Label>
+              {/* ⭐ adım 10 A1 — İÇERİK dili marka alanından; arayüz dilinden
+                  bağımsız (bir arayüz İngilizce iken bile içerik Türkçe olabilir). */}
+              <span className="label-mono text-muted-foreground">
+                {ui.planContentLanguageLabel} · {t(CONTENT_LANGUAGE_LABEL[contentLanguage])}
+              </span>
+            </div>
+            <Textarea
+              id="theme"
+              name="theme"
+              rows={2}
+              disabled={disabled || pending}
+              defaultValue={defaultTheme}
+              placeholder={ui.planThemePlaceholder}
+            />
           </div>
-          <Textarea id="theme" rows={2} disabled={disabled} defaultValue={defaultTheme} placeholder={ui.planThemePlaceholder} />
-        </div>
-        <Button type="button" disabled className="gap-2">
-          <Icon name="sparkles" className="h-4 w-4" />
-          {ui.planGenerateCta}
-        </Button>
+          <Button type="submit" disabled={disabled || pending} className="gap-2">
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon name="sparkles" className="h-4 w-4" />}
+            {pending ? ui.planGenerating : ui.planGenerateCta}
+          </Button>
+        </form>
+
+        {!disabled && state.status === "queued" && (
+          <p className="rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary">{ui.planGenerateQueued}</p>
+        )}
+        {!disabled && state.status === "error" && state.errorCode && (
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {t(AI_ERROR_COPY[state.errorCode])}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -285,6 +319,7 @@ export function PlanView({
   generateDisabled,
   defaultTheme,
   contentLanguage,
+  jobsSummary,
 }: {
   horizonDays: PlanHorizon;
   planTitle: string;
@@ -296,6 +331,9 @@ export function PlanView({
   generateDisabled: boolean;
   defaultTheme: string;
   contentLanguage: Lang;
+  /** adım 14 FAZ D — "Planı üret" kuyruğa eklendikten sonra kullanıcının
+   *  takip edeceği panel (adım 12'nin `/queue`'daki paneliyle aynı bileşen). */
+  jobsSummary: JobsSummary;
 }) {
   const { ui } = useLang();
 
@@ -314,7 +352,14 @@ export function PlanView({
         <HorizonToggle horizonDays={horizonDays} />
       </div>
 
-      <GenerateForm defaultTheme={defaultTheme} disabled={generateDisabled} contentLanguage={contentLanguage} />
+      <GenerateForm
+        defaultTheme={defaultTheme}
+        disabled={generateDisabled}
+        contentLanguage={contentLanguage}
+        horizonDays={horizonDays}
+      />
+
+      {!generateDisabled && <JobsQueueStatus summary={jobsSummary} />}
 
       <Card>
         <CardContent className="pt-5">
