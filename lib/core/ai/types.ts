@@ -46,6 +46,12 @@ export type ApiErrorCode =
   | "publish_failed"
   | "rate_limited"
   | "refused"
+  // ⭐ §12 adım 14 FAZ A3 — kill switch açıkken `enqueue_job()`'un fırlattığı
+  // özel SQLSTATE ('KILL01') buraya çevrilir. `rate_limited`'dan AYRI:
+  // rate limit bir eşik (aynı pencerede yeniden dene), bu bir acil fren
+  // (biri kapatana kadar hiç geçmez) — aynı koda eşlemek kullanıcıya
+  // yanlış "biraz bekle" mesajı verirdi.
+  | "service_paused"
   | "storage_error"
   | "unauthenticated"
   | "upstream_error";
@@ -70,6 +76,7 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   publish_failed: 502,
   rate_limited: 429,
   refused: 422,
+  service_paused: 503,
   storage_error: 500,
   unauthenticated: 401,
   upstream_error: 502,

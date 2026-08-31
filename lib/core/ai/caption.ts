@@ -12,7 +12,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { PLATFORM_META, type Lang, type PlanChannel } from "@/lib/core/types";
 import type { ApiErrorCode, CaptionDraft } from "@/lib/core/ai/types";
 
-export const CAPTION_MODEL = "claude-opus-5";
 const MAX_TOKENS = 8000;
 
 export const CHANNEL_BRIEF: Record<PlanChannel, string> = {
@@ -87,12 +86,14 @@ function readDraft(text: string): CaptionDraft | null {
 export async function writeCaption(
   input: CaptionInput,
   apiKey: string,
+  /** ⚠ Gömülü değil — adım 14 FAZ A1: `app.config.ts` `AI_JOB_MODELS.caption_write`. */
+  model: string,
 ): Promise<CaptionOutcome> {
   const client = new Anthropic({ apiKey });
 
   try {
     const message = await client.messages.create({
-      model: CAPTION_MODEL,
+      model,
       max_tokens: MAX_TOKENS,
       system: SYSTEM_PROMPT,
       output_config: {

@@ -91,6 +91,10 @@ function mapPostgresError(code: string | undefined): ApiErrorCode {
     // asildi" mesajını taşır — HTTP_STATUS_BY_CODE zaten 429'a eşliyor.
     case "RLIM1":
       return "rate_limited";
+    // §12 adım 14 FAZ A3 — acil fren, gerçek bir Postgres kodu değil (RLIM1
+    // ile aynı desen). "enqueue_job: ai duraklatildi" mesajını taşır.
+    case "KILL1":
+      return "service_paused";
     default:
       return "upstream_error";
   }

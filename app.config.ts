@@ -122,6 +122,36 @@ export function buildNav(enabled: readonly ModuleName[]): NavItem[] {
   return NAV_ORDER.filter((m) => on.has(m)).map((m) => NAV_BY_MODULE[m]);
 }
 
+/**
+ * AI çağrısı yapan iş tipi başına model — BIRLESIM_PLANI §12 adım 14 FAZ A1.
+ *
+ * Kodun içine gömülmez (`lib/core/plan/skeleton.ts` / `lib/core/ai/caption.ts`
+ * `model`'i PARAMETRE alır, artık kendi sabitleri yok) — burası tek
+ * değiştirme noktası, `lib/adapters/live/{planner,copy}.ts` buradan okur.
+ *
+ * ⭐ Karar: `claude-sonnet-5`, `claude-opus-5` DEĞİL.
+ * threadly `claude-opus-5` kullanıyordu (bkz. eski `skeleton.ts` yorumu).
+ * Bu üründe faturayı MÜŞTERİ ödüyor (§8.6) — model seçimi onun maliyet
+ * profilini belirliyor. Plan iskeleti ve caption ikisi de sınırlı, şemayla
+ * kısıtlanmış JSON çıktısı (`output_config.format`): serbest biçimli uzun
+ * metin değil, "7-26 kısa başlık+kanca" ya da "tek caption". Opus'un
+ * kalite farkının bu şekilde sınırlanmış görevde ölçülebilir bir kazanç
+ * getirip getirmediği GERÇEK kullanıcı verisi olmadan ÖLÇÜLEMEZ — ölçemediğimi
+ * söylüyorum. Sonnet 5, Opus 5'in ~%40'ı fiyatına (bkz. claude-api skill
+ * fiyat tablosu, 2026-06-24) aynı yapılandırılmış-çıktı sözleşmesini
+ * karşılıyor; başlangıç noktası olarak makul risk. Kalite şikayeti gelirse
+ * TEK satır değişir (kod değil, bu tablo) — iş tipi başına, gerekirse
+ * marka bazlı bir sonraki adımda.
+ *
+ * ⚠ DOĞRULANMALI: model adları `claude-api` skill'inin 2026-06-24 tarihli
+ * önbelleğinden alındı (bu oturumda doğrulandı) — Anthropic yeni model
+ * yayınlarsa bu tablo elle güncellenmeli, otomatik izlemiyor.
+ */
+export const AI_JOB_MODELS = {
+  plan_generate: "claude-sonnet-5",
+  caption_write: "claude-sonnet-5",
+} as const;
+
 export const appConfig: AppConfig = {
   name: BRAND_NAME,
   tagline: {

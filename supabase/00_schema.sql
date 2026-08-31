@@ -887,11 +887,13 @@ create or replace function public.enqueue_job(
 )
 returns public.jobs language plpgsql security definer set search_path = public as $$
 declare
-  v_user_id  uuid := auth.uid();
-  v_existing public.jobs;
-  v_new      public.jobs;
-  v_limit    int;
-  v_window   int;
+  v_user_id    uuid := auth.uid();
+  v_existing   public.jobs;
+  v_new        public.jobs;
+  v_limit      int;
+  v_window     int;
+  v_paused     boolean;
+  v_pause_reason text;
 begin
   if v_user_id is null then
     raise exception 'enqueue_job: oturum yok' using errcode = '28000';
@@ -907,6 +909,21 @@ begin
      limit 1;
     if found then
       return v_existing;
+    end if;
+  end if;
+
+  /* ── Acil fren — §12 adım 14 FAZ A3 ────────────────────────────────────
+     Rate limit'ten ÖNCE kontrol edilir: kill switch açıkken sayaç hiç
+     artmamalı (kapatınca müşterinin penceresi boşa yanmasın). Dedupe
+     kısa devresinden SONRA — zaten kuyrukta olan bir işin durumu bu
+     kontrolden etkilenmez, yalnızca YENİ satır açmayı engeller. */
+  if p_kind in ('plan_generate', 'caption_write', 'ugc_pipeline') then
+    select is_paused, reason into v_paused, v_pause_reason
+      from public.ai_kill_switch where id = 'global';
+
+    if v_paused then
+      raise exception 'enqueue_job: ai duraklatildi (%)', coalesce(nullif(v_pause_reason, ''), 'sebep belirtilmedi')
+        using errcode = 'KILL1';
     end if;
   end if;
 
@@ -1148,6 +1165,78 @@ create table if not exists public.rate_limit_policies (
 );
 
 alter table public.rate_limit_policies enable row level security;
+-- Politika YOK. Bilinçli.
+
+
+-- ═════════════════════════════════════════════════════════════════════════════
+--  7b. AI KULLANIM KAYDI VE ACİL FREN — BIRLESIM_PLANI §12 adım 14 FAZ A2/A3
+-- ═════════════════════════════════════════════════════════════════════════════
+
+/* Token kullanımı — "müşteri kendi AI maliyetini öder" iş modelinin görünürlük
+   tarafı (FAZ A2). `jobs`'a KOLON değil, AYRI TABLO: bir iş (backoff'la)
+   birden çok kez denenebilir/birden çok sağlayıcı çağrısı yapabilir
+   (ör. gelecekteki ugc_pipeline) — jobs'a kolon eklemek yalnızca SON denemeyi
+   tutardı, geçmiş harcamayı ezerdi. Bu tablo eklenir (append-only), üzerine
+   yazılmaz.
+
+   ⚠ FİYAT HESAPLANMAZ — yalnızca token sayısı + model. Sağlayıcı fiyatları
+   değişir; uydurulmuş bir TL/USD tutarı yanlış bilgi olurdu (görev metninin
+   kendi uyarısı). Fiyatlandırma müşteriye Anthropic'in kendi faturasından
+   gelir, bu tablo yalnızca "ne kadar token, hangi model" sorusuna cevap verir. */
+create table if not exists public.ai_usage (
+  id            uuid primary key default gen_random_uuid(),
+  brand_id      uuid not null references public.brands on delete cascade,
+  job_id        uuid references public.jobs on delete set null,
+  kind          text not null,                    -- 'plan_generate' | 'caption_write' | ...
+  provider      text not null default 'anthropic',
+  model         text not null,
+  input_tokens  int not null,
+  output_tokens int not null,
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists ai_usage_brand_idx
+  on public.ai_usage (brand_id, created_at desc);
+
+alter table public.ai_usage enable row level security;
+-- Yalnızca OKUMA politikası — müşteri kendi harcamasını görebilmeli
+-- (ileride /settings'te). YAZMA yalnızca worker'ın service-role client'ı
+-- ile (`lib/server/jobs/handlers.ts`), RLS'i bypass eder — provider_credentials
+-- deseninin tersi: orada sıfır politika (hiç okunamaz), burada yalnızca SELECT
+-- (görünürlük bunun tüm amacı).
+drop policy if exists "own ai usage" on public.ai_usage;
+create policy "own ai usage" on public.ai_usage
+  for select using (public.owns_brand(brand_id));
+
+
+/* Acil fren (FAZ A3) — ilk kez gerçek para harcanıyor, bir şey ters giderse
+   (örn. bir döngü/hata AI işlerini anormal hızda kuyruğa ekliyor) durdurma
+   yolu olmalı. Rate limit'ten AYRI mekanizma: rate limit bir EŞİK (pencere
+   dolunca kendi kendine açılır), bu bir ANAHTAR (biri elle kapatana kadar
+   hiç geçmez) — ikisini aynı tabloya/koda karıştırmak "biraz bekle" ile
+   "tamamen dur"u birbirine karıştırırdı.
+
+   Tek satır, GLOBAL (marka bazlı değil): MVP'de tek ekip AI çağrılarını
+   yönetiyor; bir olayda ("anahtar sızdı", "sağlayıcı anormal davranıyor")
+   istenen ilk tepki tüm markaları aynı anda durdurmak, birer birer marka
+   gezmek değil. Marka bazlı bir anahtar ileride bu tabloya `brand_id`
+   (nullable — null = global) eklenerek genişletilebilir, şema değişimi
+   küçük kalır.
+
+   RLS açık + politika yok — yalnızca service-role/SECURITY DEFINER okur
+   (rate_limit_counters ile aynı desen). Ops bu anahtarı SQL ile çevirir,
+   bu adımda müşteri yüzü bir UI YOK — acil bir kontrol, ürün ayarı değil. */
+create table if not exists public.ai_kill_switch (
+  id         text primary key default 'global',
+  is_paused  boolean not null default false,
+  reason     text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+insert into public.ai_kill_switch (id) values ('global')
+  on conflict (id) do nothing;
+
+alter table public.ai_kill_switch enable row level security;
 -- Politika YOK. Bilinçli.
 
 

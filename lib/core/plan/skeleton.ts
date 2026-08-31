@@ -24,7 +24,6 @@ import { toPromptBlock, type Brand } from "@/lib/core/brand/types";
 import { buildSlots, WEEKDAY_LABEL, type PlannedSlot } from "@/lib/core/plan/template";
 import type { PlanHorizon, PlanMode } from "@/lib/core/plan/types";
 
-const MODEL = "claude-opus-5";
 const MAX_TOKENS = 16000;
 const POST_KINDS = Object.keys(KIND_LABEL) as PostKind[];
 
@@ -247,6 +246,8 @@ function readAuto(text: string, horizonDays: number): SkeletonPost[] | null {
 export async function planSkeleton(
   input: SkeletonInput,
   apiKey: string,
+  /** ⚠ Gömülü değil — adım 14 FAZ A1: `app.config.ts` `AI_JOB_MODELS.plan_generate`. */
+  model: string,
 ): Promise<SkeletonOutcome> {
   const isWeekly = input.mode === "weekly";
   const slots = isWeekly ? buildSlots(input.start, input.horizonDays) : [];
@@ -256,7 +257,7 @@ export async function planSkeleton(
 
   try {
     const message = await new Anthropic({ apiKey }).messages.create({
-      model: MODEL,
+      model,
       max_tokens: MAX_TOKENS,
       system: SYSTEM_PROMPT,
       output_config: {
