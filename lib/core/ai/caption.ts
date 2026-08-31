@@ -10,7 +10,8 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { PLATFORM_META, type Lang, type PlanChannel } from "@/lib/core/types";
-import type { ApiErrorCode, CaptionDraft } from "@/lib/core/ai/types";
+import type { CaptionDraft, ProviderCallOutcome } from "@/lib/core/ai/types";
+import { classifyAnthropicError } from "@/lib/core/ai/classify-error";
 
 const MAX_TOKENS = 8000;
 
@@ -56,9 +57,7 @@ export interface CaptionInput {
   brand?: string;
 }
 
-export type CaptionOutcome =
-  | { ok: true; draft: CaptionDraft }
-  | { ok: false; code: ApiErrorCode; detail?: string };
+export type CaptionOutcome = ProviderCallOutcome<{ draft: CaptionDraft }>;
 
 function buildPrompt({ idea, channel, tone, lang, brand }: CaptionInput): string {
   return [
@@ -129,10 +128,14 @@ export async function writeCaption(
       };
     }
 
-    return { ok: true, draft };
+    return {
+      ok: true,
+      draft,
+      usage: { inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens },
+    };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "unknown error";
-    console.error("[ai/caption]", detail);
-    return { ok: false, code: "upstream_error", detail };
+    const { code, detail } = classifyAnthropicError(error);
+    console.error("[ai/caption]", code, detail);
+    return { ok: false, code, detail };
   }
 }

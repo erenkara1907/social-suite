@@ -19,7 +19,8 @@ import {
   KIND_LABEL, PLAN_CHANNELS, PLATFORM_META,
   type Lang, type PlanChannel, type PostKind,
 } from "@/lib/core/types";
-import type { ApiErrorCode } from "@/lib/core/ai/types";
+import type { ProviderCallOutcome } from "@/lib/core/ai/types";
+import { classifyAnthropicError } from "@/lib/core/ai/classify-error";
 import { toPromptBlock, type Brand } from "@/lib/core/brand/types";
 import { buildSlots, WEEKDAY_LABEL, type PlannedSlot } from "@/lib/core/plan/template";
 import type { PlanHorizon, PlanMode } from "@/lib/core/plan/types";
@@ -59,11 +60,13 @@ export interface SkeletonInput {
   mode: PlanMode;
   start: Date;
   brand: Brand | null;
+  /** ⚠ adım 14 FAZ C — `planSkeleton()`'un kendisi bunu OKUMAZ (saf kalır);
+   *  yalnızca `lib/adapters/live/planner.ts`'in anahtar çözümü + kullanım
+   *  kaydı için taşır. Demo modda okunmaz. */
+  brandId?: string;
 }
 
-export type SkeletonOutcome =
-  | { ok: true; title: string; posts: SkeletonPost[] }
-  | { ok: false; code: ApiErrorCode; detail?: string };
+export type SkeletonOutcome = ProviderCallOutcome<{ title: string; posts: SkeletonPost[] }>;
 
 /* ── Schemas ──────────────────────────────────────────────────────────────── */
 
@@ -287,10 +290,15 @@ export async function planSkeleton(
       return { ok: false, code: "upstream_error", detail: "plan did not match the schema" };
     }
 
-    return { ok: true, title: envelope.title, posts };
+    return {
+      ok: true,
+      title: envelope.title,
+      posts,
+      usage: { inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens },
+    };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "unknown error";
-    console.error("[plan/skeleton] anthropic", detail);
-    return { ok: false, code: "upstream_error", detail };
+    const { code, detail } = classifyAnthropicError(error);
+    console.error("[plan/skeleton] anthropic", code, detail);
+    return { ok: false, code, detail };
   }
 }

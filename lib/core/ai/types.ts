@@ -40,6 +40,10 @@ export type ApiErrorCode =
   // bu kod o anlama gelir. "refused" AI reddi (içerik/politika) için ayrı.
   | "forbidden"
   | "invalid_input"
+  // ⭐ §12 adım 14 FAZ B — `missing_key`'den AYRI: bu, marka bir anahtar
+  // GİRDİ ama sağlayıcı onu reddetti (Anthropic 401). Kullanıcının yapması
+  // gereken şey farklı — "anahtar ekle" değil "anahtarı değiştir/düzelt".
+  | "invalid_key"
   | "missing_key"
   | "not_configured"
   | "not_found"
@@ -53,8 +57,28 @@ export type ApiErrorCode =
   // yanlış "biraz bekle" mesajı verirdi.
   | "service_paused"
   | "storage_error"
+  // ⭐ §12 adım 14 FAZ B — sağlayıcı isteğe zamanında yanıt vermedi
+  // (`Anthropic.APIConnectionTimeoutError`). `upstream_error`'dan ayrı:
+  // kullanıcıya "tekrar dene" demesi doğru ama sebep farklı, kopya da öyle.
+  | "timeout"
   | "unauthenticated"
   | "upstream_error";
+
+/** Sağlayıcının döndürdüğü ham token sayısı — §12 adım 14 FAZ A2, `ai_usage`'a
+ *  yazılacak. Fiyat HESAPLANMAZ, yalnızca sayı taşınır. */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * `planSkeleton()`/`writeCaption()`'ın paylaştığı ortak zarf — ikisi de
+ * `{ok:true, usage, ...kendi alanları} | {ok:false, code, detail?}` şeklinde.
+ * `lib/server/ai/run-provider-call.ts` bu ortaklığa dayanıyor.
+ */
+export type ProviderCallOutcome<TSuccess> =
+  | ({ ok: true; usage: TokenUsage } & TSuccess)
+  | { ok: false; code: ApiErrorCode; detail?: string };
 
 export interface ApiError {
   code: ApiErrorCode;
@@ -70,6 +94,7 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   duplicate: 409,
   forbidden: 403,
   invalid_input: 400,
+  invalid_key: 401,
   missing_key: 503,
   not_configured: 503,
   not_found: 404,
@@ -78,6 +103,7 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   refused: 422,
   service_paused: 503,
   storage_error: 500,
+  timeout: 504,
   unauthenticated: 401,
   upstream_error: 502,
 };
