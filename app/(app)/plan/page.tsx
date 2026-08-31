@@ -51,6 +51,9 @@ export default async function Page({
       mode: "weekly",
       start: now,
       brand,
+      // ⭐ adım 14 FAZ C — canlı modda anahtar çözümü için gerekli
+      // (livePlanner.generate()). Demo modda okunmaz.
+      brandId: brand.id,
     }),
     contentPort.list(),
   ]);

@@ -141,6 +141,18 @@ export interface JobPayloadMap {
 /** Ayrıştırılmış birlik — bir işleyici kaydı `kind`'a göre daraltabilsin diye. */
 export type AnyJob = { [K in JobKind]: { kind: K; payload: JobPayloadMap[K] } }[JobKind];
 
+/**
+ * Bir işleyicinin `payload` DIŞINDA ihtiyaç duyduğu şey — §12 adım 14 FAZ C.
+ * `jobs` satırının kendisi zaten taşıyor (`claim_jobs()` `returning j.*`);
+ * `lib/server/jobs/worker.ts` bunu `job.brand_id`/`job.user_id`'den kurar.
+ * Adım 12'nin `noop_test`'i bunu hiç okumaz ama imza herkeste aynı olmalı.
+ */
+export interface JobContext {
+  jobId: string;
+  brandId: string;
+  userId: string;
+}
+
 /* ── Yeniden deneme politikası ───────────────────────────────────────────── */
 
 export interface JobRetryPolicy {

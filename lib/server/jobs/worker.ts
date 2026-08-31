@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PermanentJobError } from "@/lib/core/jobs/errors";
-import { JOB_RETRY_POLICY, type JobKind } from "@/lib/core/jobs/types";
+import { JOB_RETRY_POLICY, type JobContext, type JobKind } from "@/lib/core/jobs/types";
 import { JOB_HANDLERS } from "@/lib/server/jobs/handlers";
 
 /**
@@ -89,6 +89,8 @@ export interface WorkerSummary {
 
 interface JobsRow {
   id: string;
+  brand_id: string;
+  user_id: string;
   kind: string;
   payload: unknown;
   attempts: number;
@@ -154,7 +156,7 @@ async function requeueUnprocessed(admin: SupabaseClient, jobId: string): Promise
  *  başına izolasyon"); çağıran taraf try/catch'e ihtiyaç duymaz. */
 async function processJob(admin: SupabaseClient, job: JobsRow): Promise<"succeeded" | "requeued" | "dead"> {
   const kind = job.kind as JobKind;
-  const handler = JOB_HANDLERS[kind] as ((payload: unknown) => Promise<void>) | undefined;
+  const handler = JOB_HANDLERS[kind] as ((payload: unknown, ctx: JobContext) => Promise<void>) | undefined;
 
   try {
     if (!handler) {
@@ -162,7 +164,11 @@ async function processJob(admin: SupabaseClient, job: JobsRow): Promise<"succeed
       // olması gerekmez ama savunma: kalıcı sayılır, sessizce yutulmaz.
       throw new PermanentJobError(`bilinmeyen iş tipi: ${job.kind}`);
     }
-    await runWithTimeout(() => handler(job.payload), PER_JOB_TIMEOUT_MS);
+    // §12 adım 14 FAZ C — payload dışında brand_id/user_id de gerekiyor
+    // (anahtar çözümü, content_items yazımı). `jobs` satırının kendisi
+    // (`claim_jobs()` `returning j.*`) zaten taşıyor.
+    const ctx: JobContext = { jobId: job.id, brandId: job.brand_id, userId: job.user_id };
+    await runWithTimeout(() => handler(job.payload, ctx), PER_JOB_TIMEOUT_MS);
 
     await admin.from("jobs").update({ state: "succeeded", locked_at: null, locked_by: null }).eq("id", job.id);
     return "succeeded";

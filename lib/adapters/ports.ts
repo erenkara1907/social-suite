@@ -146,6 +146,9 @@ export interface CopyInput {
   brand: Brand | null;
   /** Zincirin önceki halkaları, `chain_position` sırasıyla. Boşsa kök içerik. */
   chainContext?: readonly ContentItemRow[];
+  /** ⚠ adım 14 FAZ C — yalnızca `lib/adapters/live/copy.ts`'in anahtar
+   *  çözümü + kullanım kaydı için. Demo modda okunmaz. */
+  brandId?: string;
 }
 
 /* ── 4. ImagePort ─────────────────────────────────────────────────────────── */
