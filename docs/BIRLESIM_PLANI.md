@@ -1770,24 +1770,36 @@ markasıdır; yeni ürün kendi hue'sunu alacak. Yapı kalır, sayı değişir.
   **gövdesi** olur; 12 politikanın hiçbiri değişmez.
 - Tetikleyici: ilk kurumsal müşteri "3 kişi aynı hesaba girsin" derse öne alınır.
 
-### S3. Embedding sağlayıcısı — ✅ KARAR VERİLDİ
+### S3. Embedding sağlayıcısı — ⚠ AÇIK (adım 15'te yeniden açıldı)
 
-**Karar: Voyage AI ile başlanacak. Kolon sağlayıcıdan bağımsız: `vector(1024)`
-SABİT (bkz. D3).**
+**Sağlayıcı seçilene kadar AÇIK. Kolon sözleşmesi sabit: `vector(1024)`
+(bkz. D3) — bu, sağlayıcı kararından BAĞIMSIZ ve DEĞİŞMEDİ.**
 
-- **Sağlayıcı:** Voyage AI `voyage-3.5`, `output_dimension=1024`. Türkçe içerik
-  için çok dilli model gerekli; Anthropic'in kendi önerdiği yol.
-- **Kolon artık karara bağlı değil.** Önceki hâli "OpenAI seçilirse `vector(1536)`
-  olur" diyordu. D3 bunu tersine çevirdi: kolon `vector(1024)` olarak sabittir ve
-  `EmbeddingPort` implementasyonu — Voyage, OpenAI, ya da başka biri — **tam 1024
-  boyut döndürmek zorundadır.** Sağlayıcı değişimi artık şema değişimi değildir.
-- **Müşteri sürtünmesi kabul edildi:** bu, müşterinin dördüncü API anahtarı.
-  Azaltma yolu FAZ 3'e bırakıldı (embedding'i biz karşılayıp maliyeti plana
-  yansıtmak — çağrı başına maliyeti caption'dan düşük).
-- **⚠ DOĞRULANMALI (D3):** Voyage ve OpenAI'ın güncel dokümantasyonundan
-  **çıktı boyutu kısaltma desteği** teyit edilmeli (`output_dimension` /
-  `dimensions` parametreleri). §12 adım 15'ten önce. Teyit edilemeyen sağlayıcı
-  elenir; kolon değişmez.
+Önceki oturum (adım 0-2) bunu "Voyage AI, `voyage-3.5`, `output_dimension=1024`"
+olarak kapatmıştı. Adım 15'te şu gerçek ortaya çıktı: **hiçbir markada
+`VOYAGE_API_KEY`/Vault satırı YOK** ve bu geçici bir eksiklik değil, BYOK
+modelinin kalıcı bir sonucu olabilir (her müşteri beşinci anahtarı
+girmeyecek). "⚠ DOĞRULANMALI" maddesi (aşağıda, değişmeden bırakıldı) hiçbir
+oturumda fiilen teyit edilmedi — model adı/`output_dimension` bir canlı
+çağrıya karşı hiç doğrulanmadı. Adım 15 bu yüzden sağlayıcıya özgü HİÇBİR kod
+YAZMADI ve motoru sağlayıcı OLMADAN da çalışacak şekilde tasarladı (bkz.
+`docs/ADIM_15_RAPOR.md` §1-2, "zarif düşüş" — Katman 2/3 sağlayıcı yoksa
+atlanır, Katman 1/3'ün elle-işaretleme yolu her zaman çalışır).
+
+- **Sağlayıcı seçimi ERTELENDİ.** Voyage hâlâ ilk aday (çok dilli, Anthropic'in
+  önerdiği yol) ama bu, `output_dimension` desteğinin güncel dokümantasyondan
+  teyit edilmesini BEKLİYOR — bir sonraki oturumun işi.
+- **Kolon artık karara bağlı değil (DEĞİŞMEDİ).** `vector(1024)` sabittir,
+  `EmbeddingPort` implementasyonu — Voyage, OpenAI, ya da başka biri — **tam
+  1024 boyut döndürmek zorundadır.** Sağlayıcı değişimi artık şema değişimi
+  değildir.
+- **Müşteri sürtünmesi kararı DEĞİŞMEDİ:** bu, müşterinin dördüncü/beşinci API
+  anahtarı. Azaltma yolu FAZ 3'e bırakıldı.
+- **⚠ DOĞRULANMALI (D3) — HÂLÂ AÇIK:** Voyage ve OpenAI'ın güncel
+  dokümantasyonundan **çıktı boyutu kısaltma desteği** teyit edilmeli
+  (`output_dimension` / `dimensions` parametreleri). Adım 15'te YAPILMADI
+  (anahtar yok, doğrulanamadı) — sağlayıcı seçilip gerçek bir anahtar
+  girildiğinde yapılmalı. Teyit edilemeyen sağlayıcı elenir; kolon değişmez.
 
 ### S4. FAZ 2'de ilk bağlanacak servis hangisi? — ✅ KARAR VERİLDİ
 

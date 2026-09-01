@@ -72,6 +72,17 @@ eder.
   ama gerçek bir yan etki üretmez (`generateDisabled`/`queueActionDisabledHint`)
   — görsel olarak "burada ne olacağını" göstermek için var, gerçek işlem
   yapmıyor.
+- **Tekrar önleme bugün yalnızca birebir kopyaları engelliyor, benzerleri
+  DEĞİL (adım 15).** Motorun üç katmanı var: (1) birebir parmak izi — her
+  zaman açık, ücretsiz; (2) anlamsal benzerlik (embedding) — Voyage anahtarı
+  hiçbir markada GİRİLMEDİ, bu yüzden bugün KAPALI; (3) otomatik "devam mı?"
+  kararı katman 2'ye bağlı, o da kapalı olduğu için bugün hiç TETİKLENMİYOR.
+  Sonuç: bugün "A ürününü tanıtan içerik" ile "A ürününü FARKLI kelimelerle
+  yeniden anlatan içerik" arasındaki fark otomatik yakalanmıyor — yalnızca
+  BİREBİR aynı başlık+kanca engelleniyor. Devam zinciri (`parent_id`) elle
+  kurulabiliyor (bir içeriği açıkça "bunun devamı" olarak işaretlemek), otomatik
+  öneri değil. `/settings`'te Voyage satırının `whenMissing` metni bunu zaten
+  söylüyor — burada da açıkça yazılı dursun.
 - **Fiyatlandırma henüz yok.** `/studio`'daki kredi tablosu bizim vendor
   maliyetimiz (Kie/ElevenLabs/fal'ın gerçek birim fiyatları) — müşteriye
   yansıyacak paket fiyatı henüz belirlenmedi (`app.config.ts`'teki
