@@ -32,6 +32,7 @@ export const liveCopy: CopyPort = {
             tone: input.tone,
             lang: input.lang,
             brand: toPromptBlock(input.brand, input.lang),
+            chainContext: input.chainContext,
           },
           apiKey,
           model,

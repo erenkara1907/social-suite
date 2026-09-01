@@ -150,6 +150,10 @@ export function buildNav(enabled: readonly ModuleName[]): NavItem[] {
 export const AI_JOB_MODELS = {
   plan_generate: "claude-sonnet-5",
   caption_write: "claude-sonnet-5",
+  /** §12 adım 15, Akış E Kontrol 3c — "devam mı, tekrar mı?" tek bir
+   *  evet/hayır + kısa ifade; caption_write ile aynı model, `effort: "low"`
+   *  ile ucuzlatılıyor (bkz. lib/core/dedupe/judge-continuation.ts). */
+  continuation_judge: "claude-sonnet-5",
 } as const;
 
 export const appConfig: AppConfig = {

@@ -10,7 +10,7 @@ import { planSkeleton } from "@/lib/core/plan/skeleton";
 import { writeCaption } from "@/lib/core/ai/caption";
 import { toPromptBlock } from "@/lib/core/brand/types";
 import { skeletonToContentItems } from "@/lib/core/plan/calendar";
-import { checkDuplicate } from "@/lib/core/dedupe";
+import { createDedupeRunBudget, runDedupeCheck } from "@/lib/server/dedupe/run";
 import { getBrandForJob } from "@/lib/server/jobs/context";
 import { runAnthropicCall } from "@/lib/server/ai/run-provider-call";
 
@@ -86,14 +86,23 @@ async function handlePlanGenerate(
 
   const projected = skeletonToContentItems(outcome.posts, start, ctx.brandId, brand.timezone);
 
+  // ⚠ FAZ B4 — bir plan'ın TÜMÜNde paylaşılan LLM çağrı bütçesi (Kontrol 3c).
+  // Tek bir plan_generate çalışması onlarca "yakın" aday üretebilir; bu
+  // sayaç olmadan her biri ayrı bir Anthropic çağrısına çıkardı.
+  const dedupeBudget = createDedupeRunBudget();
+
   let written = 0;
   let blocked = 0;
   for (const item of projected) {
-    // ⭐ FAZ C2 — dedupe DİKİŞİ. Adım 15'ten önce her zaman "new" döner;
-    // handler bu noktadan sonra ASLA değişmeyecek (adım 15 yalnızca
-    // checkDuplicate()'in gövdesini dolduracak).
-    const verdict = await checkDuplicate({ brandId: ctx.brandId, title: item.title, hook: item.hook });
-    if (verdict !== "new") {
+    // ⭐ FAZ C2 — dedupe DİKİŞİ (adım 14) doldu: checkDuplicate() artık Akış
+    // E'nin üç katmanını gerçekten çalıştırıyor (adım 15 — lib/core/dedupe/).
+    const decision = await runDedupeCheck(
+      admin,
+      { brandId: ctx.brandId, title: item.title, hook: item.hook, topicKey: item.topic_key ?? undefined },
+      dedupeBudget,
+    );
+
+    if (decision.verdict === "duplicate") {
       blocked += 1;
       await admin.from("activity").insert({
         brand_id: ctx.brandId,
@@ -101,7 +110,7 @@ async function handlePlanGenerate(
         actor: "plan_generate",
         action: "duplicate_blocked",
         target: item.title,
-        meta: { verdict },
+        meta: { reason: decision.reason, matchedId: decision.matchedId, similarity: decision.similarity ?? null },
       });
       continue;
     }
@@ -110,9 +119,35 @@ async function handlePlanGenerate(
     // (`SKELETON_ID_PREFIX`) — DB kendi uuid'ini üretecek, INSERT'e girmez.
     const insertable: Record<string, unknown> = { ...item, plan_id: plan.id, user_id: ctx.userId };
     delete insertable.id;
-    const { error: itemError } = await admin.from("content_items").insert(insertable);
+    // Katman 1 fingerprint HER ZAMAN yazılır (bir sonraki plan_generate'in
+    // Kontrol 1'i bunu okuyacak); embedding yalnızca Katman 2 açıkken dolu —
+    // senkron hesaplanır (bkz. lib/server/dedupe/run.ts başlığı).
+    insertable.content_fingerprint = decision.fingerprint;
+    insertable.embedding = decision.embedding;
+    if (decision.verdict === "continuation") {
+      insertable.parent_id = decision.parentId;
+      insertable.continuation_note = decision.continuationNote;
+    }
+
+    const { data: inserted, error: itemError } = await admin
+      .from("content_items")
+      .insert(insertable)
+      .select("id")
+      .single<{ id: string }>();
     if (itemError) throw new TransientJobError(`content_items yazılamadı: ${itemError.message}`);
     written += 1;
+
+    if (decision.verdict === "continuation") {
+      await admin.from("activity").insert({
+        brand_id: ctx.brandId,
+        user_id: ctx.userId,
+        actor: "plan_generate",
+        action: "continuation_created",
+        target: item.title,
+        content_item_id: inserted?.id ?? null,
+        meta: { parentId: decision.parentId, similarity: decision.similarity },
+      });
+    }
   }
 
   await admin.from("activity").insert({
@@ -131,6 +166,34 @@ interface ContentItemForCaption {
   platform: string;
   title: string;
   hook: string;
+  root_id: string | null;
+  chain_position: number;
+}
+
+interface ChainAncestorRow {
+  title: string;
+  hook: string;
+  continuation_note: string;
+}
+
+/** §4b — bu bir devam içeriğiyse (chain_position > 1), zincirin önceki
+ *  halkalarını `writeCaption()`'ın `chainContext`'i için getirir. Kök içerik
+ *  (chain_position === 1) için boş dizi — istem "önceki bölümler" bloğu
+ *  eklemez (bkz. caption.ts `buildChainBlock`). */
+async function fetchChainContext(
+  admin: ReturnType<typeof createAdminClient>,
+  item: ContentItemForCaption,
+): Promise<ChainAncestorRow[]> {
+  if (item.chain_position <= 1 || !item.root_id) return [];
+  const { data, error } = await admin
+    .from("content_items")
+    .select("title,hook,continuation_note")
+    .eq("root_id", item.root_id)
+    .lt("chain_position", item.chain_position)
+    .order("chain_position", { ascending: true })
+    .returns<ChainAncestorRow[]>();
+  if (error) throw new TransientJobError(`zincir bağlamı okunamadı: ${error.message}`);
+  return data ?? [];
 }
 
 /** BIRLESIM_PLANI §4a — `idea` → `draft` geçişi, gövde bu adımda yazılır. */
@@ -145,7 +208,7 @@ async function handleCaptionWrite(
 
   const { data: item, error: itemError } = await admin
     .from("content_items")
-    .select("id,brand_id,platform,title,hook")
+    .select("id,brand_id,platform,title,hook,root_id,chain_position")
     .eq("id", payload.contentItemId)
     .eq("brand_id", ctx.brandId)
     .maybeSingle<ContentItemForCaption>();
@@ -157,6 +220,10 @@ async function handleCaptionWrite(
 
   const model = AI_JOB_MODELS.caption_write;
   const idea = [item.title, item.hook].filter(Boolean).join(" — ");
+  // §4b/§12 adım 15 FAZ C — devam içeriğiyse model "daha önce ne söyledik"i
+  // görsün, yoksa zincir kendini tekrar eder (bkz. caption.ts buildChainBlock).
+  const chain = await fetchChainContext(admin, item);
+  const chainContext = chain.map((c) => ({ title: c.title, hook: c.hook, continuationNote: c.continuation_note }));
 
   const outcome = await runAnthropicCall(
     { brandId: ctx.brandId, kind: "caption_write", model, jobId: ctx.jobId },
@@ -168,6 +235,7 @@ async function handleCaptionWrite(
           tone: brand.voice || "samimi, abartısız",
           lang: brand.contentLanguage,
           brand: toPromptBlock(brand, brand.contentLanguage),
+          chainContext,
         },
         apiKey,
         model,

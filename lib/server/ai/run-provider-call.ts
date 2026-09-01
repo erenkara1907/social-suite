@@ -50,8 +50,10 @@ function sanitizeDetail(detail: string | undefined, code: ApiErrorCode): string 
 export interface RunProviderCallInput {
   brandId: string;
   /** `ai_usage.kind` — iş tipiyle aynı string, ama bu fonksiyon `JobKind`'a
-   *  bağımlı değil (canlı önizleme çağrısının arkasında bir iş YOK). */
-  kind: "plan_generate" | "caption_write";
+   *  bağımlı değil (canlı önizleme çağrısının arkasında bir iş YOK).
+   *  `continuation_judge` — §12 adım 15, Akış E Kontrol 3c; `ai_usage.kind`
+   *  kolonunda CHECK yok (serbest text), şema değişikliği gerekmedi. */
+  kind: "plan_generate" | "caption_write" | "continuation_judge";
   model: string;
   /** Yalnızca kuyruktan gelen çağrılarda dolu — `ai_usage.job_id`. */
   jobId?: string;

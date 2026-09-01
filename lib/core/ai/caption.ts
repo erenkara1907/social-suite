@@ -48,6 +48,15 @@ const CAPTION_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/** §4b devam zinciri — bir halkanın önceki halkalardan model'e taşınan hâli.
+ *  `ContentItemRow`'un TAMAMI değil, yalnızca istemin ihtiyaç duyduğu üç alan
+ *  (bkz. `lib/adapters/ports.ts`'in `CopyInput.chainContext`'i bu tipi kullanır). */
+export interface ChainContextItem {
+  title: string;
+  hook: string;
+  continuationNote: string;
+}
+
 export interface CaptionInput {
   idea: string;
   channel: PlanChannel;
@@ -55,11 +64,31 @@ export interface CaptionInput {
   lang: Lang;
   /** The brand block from lib/brand/types.ts, or "" when there is no profile. */
   brand?: string;
+  /** ⚠ §12 adım 15 FAZ C — bu bir devam içeriğiyse (chain_position > 1),
+   *  zincirin önceki halkaları `chain_position` sırasıyla. Boşsa/verilmezse
+   *  kök içerik — istem "önceki bölümler" bloğu EKLEMEZ. */
+  chainContext?: readonly ChainContextItem[];
 }
 
 export type CaptionOutcome = ProviderCallOutcome<{ draft: CaptionDraft }>;
 
-function buildPrompt({ idea, channel, tone, lang, brand }: CaptionInput): string {
+/** Zincirin önceki halkalarını "daha önce şunu söyledik" bloğuna çevirir —
+ *  §4b'nin vaadi tam bu: "ikinci içerik A'ya atıf yaparak farklı bir
+ *  özelliğini anlatır". Model bunu görmezse zincir kendini tekrar eder. */
+function buildChainBlock(chainContext: readonly ChainContextItem[] | undefined): string[] {
+  if (!chainContext || chainContext.length === 0) return [];
+  const parts = chainContext.map(
+    (c, i) => `${i + 1}. ${c.title} — ${c.hook}${c.continuationNote ? ` (${c.continuationNote})` : ""}`,
+  );
+  return [
+    "This is a CONTINUATION of an earlier series for the same brand. Earlier parts, in order:",
+    ...parts,
+    "Cover a DIFFERENT angle than the parts above — do not restate them.",
+    "",
+  ];
+}
+
+function buildPrompt({ idea, channel, tone, lang, brand, chainContext }: CaptionInput): string {
   return [
     `Channel: ${PLATFORM_META[channel].name}`,
     `Channel brief: ${CHANNEL_BRIEF[channel]}`,
@@ -67,6 +96,7 @@ function buildPrompt({ idea, channel, tone, lang, brand }: CaptionInput): string
     `Write the caption in ${lang === "tr" ? "Turkish" : "English"}.`,
     "",
     ...(brand ? [brand, ""] : []),
+    ...buildChainBlock(chainContext),
     "The idea to turn into a caption:",
     idea,
   ].join("\n");

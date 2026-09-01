@@ -23,6 +23,7 @@
  * kendi modunu bilmez, bilmemeli.
  */
 import type { ApiResult, CaptionDraft, GeneratedImage } from "@/lib/core/ai/types";
+import type { ChainContextItem } from "@/lib/core/ai/caption";
 import type { Brand } from "@/lib/core/brand/types";
 import type { SkeletonInput, SkeletonPost } from "@/lib/core/plan/skeleton";
 import type {
@@ -145,7 +146,7 @@ export interface CopyInput {
   lang: Lang;
   brand: Brand | null;
   /** Zincirin önceki halkaları, `chain_position` sırasıyla. Boşsa kök içerik. */
-  chainContext?: readonly ContentItemRow[];
+  chainContext?: readonly ChainContextItem[];
   /** ⚠ adım 14 FAZ C — yalnızca `lib/adapters/live/copy.ts`'in anahtar
    *  çözümü + kullanım kaydı için. Demo modda okunmaz. */
   brandId?: string;

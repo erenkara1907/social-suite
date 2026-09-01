@@ -379,6 +379,14 @@ grant execute on function public.list_provider_credentials(uuid) to authenticate
 -- çağırdığı fonksiyon. owns_brand() kontrolü YOK: çağıran zaten sunucu
 -- kodudur (auth.uid() burada set değil, service-role bypass eder) — claim_jobs/
 -- rate_limit_hit ile aynı "sistem içi, RLS'in dışında" sınıf.
+-- ⚠ adım 15 FAZ C canlı doğrulaması sırasında bulundu — RETURNS TABLE'ın
+-- kendi "config" OUT parametresi aşağıdaki SELECT'in bare "config" kolon
+-- referansıyla ÇAKIŞIYORDU (42702, "column reference config is ambiguous"),
+-- set_provider_credential'ın YUKARIDA zaten belgelediği aynı sınıf hata
+-- (bkz. o fonksiyonun "provider" için yazdığı yorum). Sonuç: canlı moddaki
+-- HER Anthropic çağrısı resolveProviderCredential() içinde fırlıyordu —
+-- SELECT ambiguity satır var/yok'tan bağımsız, plan zamanında oluşuyor.
+-- Düzeltme: aynı takma ad deseni (pc.).
 create or replace function public.get_provider_secret(p_brand_id uuid, p_provider text)
 returns table (secret text, config jsonb)
 language plpgsql security definer set search_path = public as $$
@@ -386,9 +394,9 @@ declare
   v_secret_id uuid;
   v_config    jsonb;
 begin
-  select vault_secret_id, config into v_secret_id, v_config
-    from public.provider_credentials
-   where brand_id = p_brand_id and provider = p_provider and is_active;
+  select pc.vault_secret_id, pc.config into v_secret_id, v_config
+    from public.provider_credentials pc
+   where pc.brand_id = p_brand_id and pc.provider = p_provider and pc.is_active;
 
   if v_secret_id is null then
     return query select null::text, coalesce(v_config, '{}'::jsonb);
