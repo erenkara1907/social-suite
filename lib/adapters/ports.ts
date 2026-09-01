@@ -354,34 +354,34 @@ export interface PersistBytesInput {
 /* ── 12. DedupePort ───────────────────────────────────────────────────────── */
 
 /**
- * Tekrar kontrolü — ürün tanımının 5. maddesi ("aynı içerik tekrar üretilmez").
+ * Tekrar önleme motorunun EMBEDDİNG sağlayıcı sınırı — ürün tanımının 5.
+ * maddesi ("aynı içerik tekrar üretilmez"). §12 adım 15.
  *
- * Ekran: doğrudan bir ekranı beslemez; `/plan` üretimi sırasında araya girer ve
- * sonucu `/dashboard`'ın aktivite akışında `duplicate_blocked` olarak görünür.
- * Demo kaynağı: her zaman "yeni". FAZ 2: fingerprint + pgvector (§12 adım 15).
+ * ⚠ Bu, motorun KENDİSİ değil — yalnızca "1024 boyut dönen bir vektör
+ * üreticisi" sınırı (görev metninin kendi tabiriyle "EmbeddingPort"). Asıl
+ * karar mantığı (Akış E'nin üç kontrolü, fingerprint, eşikler, devam zinciri)
+ * `lib/core/dedupe/checkDuplicate()`'te yaşıyor ve `plan_generate` işleyicisi
+ * (`lib/server/jobs/handlers.ts` → `lib/server/dedupe/run.ts`) onu DOĞRUDAN
+ * çağırıyor — job pipeline'ı demo/live mod ayrımına tabi değil (bir "demo
+ * plan_generate" yok, kuyruk işleri her zaman gerçek altyapıya karşı çalışır).
+ * Bu port o yüzden yalnızca İKİ yerde kullanılır: (1) §9.1'in on iki port
+ * sözleşmesini tamamlamak (`PortMap`/`REGISTRY` derleme zamanında hepsini
+ * ister), (2) testlerin `demoDedupe.embed()`'i DOĞRUDAN import edip
+ * `checkDuplicate()`'e sahte-ama-deterministik bir embedding vermesi.
  *
- * ⚠ D3 — `embed()` TAM 1024 boyut döndürmek zorunda; live implementasyon dönen
- * uzunluğu çalışma zamanında doğrular ve değilse FIRLATIR (sessizce kırpmaz).
- * Kolon sözleşmedir, sağlayıcı ona uyar.
- * ⚠ Eşikler (0.92 / 0.82) kalibre EDİLMEDİ — ilk ~200 içerikten sonra ölçülecek.
+ * ⚠ D3 — `embed()` TAM `EMBEDDING_DIMENSIONS` (1024) boyut döndürmek
+ * zorunda; live implementasyon bugün `not_configured` döner (Voyage entegre
+ * EDİLMEDİ — bkz. `lib/adapters/live/dedupe.ts` başlığı).
+ * ⚠ Eşikler (0.92 / 0.82) kalibre EDİLMEDİ — `lib/core/dedupe/config.ts`.
  */
 export interface DedupePort {
-  check(candidate: DedupeCandidate): Promise<ApiResult<DedupeVerdict>>;
   /** Boyutu `EMBEDDING_DIMENSIONS` olan vektör. Doğrulama implementasyonda. */
-  embed(input: string): Promise<ApiResult<number[]>>;
+  embed(input: string, brandId: string): Promise<ApiResult<number[]>>;
+  /** Bu marka için Katman 2 (anlamsal benzerlik) denemeye değer mi —
+   *  sağlayıcı yapılandırılı mı VE bu implementasyon gerçekten embed
+   *  üretebiliyor mu. I/O dışında bir "bugün bu iş mümkün mü" sorusu. */
+  isAvailable(brandId: string): Promise<boolean>;
 }
-
-export interface DedupeCandidate {
-  title: string;
-  hook: string;
-  topicKey?: string;
-}
-
-/** §4c'nin üç kararı. `near` durumunda `parentId` bir devam önerisidir. */
-export type DedupeVerdict =
-  | { decision: "new" }
-  | { decision: "near"; similarity: number; parentId: string }
-  | { decision: "duplicate"; similarity: number; matchedId: string };
 
 /* ── Port adı → arayüz eşlemesi ───────────────────────────────────────────── */
 

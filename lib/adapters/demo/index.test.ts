@@ -54,9 +54,10 @@ describe("⭐ 12 portun demo implementasyonu ÇAĞRILABİLİYOR", () => {
   it("storage.list()", async () => {
     expect((await port("storage").list()).length).toBeGreaterThan(0);
   });
-  it("dedupe.check()", async () => {
-    const r = await port("dedupe").check({ title: "a", hook: "b" });
-    expect(r.ok && r.data.decision).toBe("new");
+  it("dedupe.isAvailable() / embed() — §12 adım 15 revize A3.2", async () => {
+    expect(await port("dedupe").isAvailable("b1")).toBe(true);
+    const r = await port("dedupe").embed("a b", "b1");
+    expect(r.ok && r.data.length).toBe(1024);
   });
 
   it("⭐ hiçbir demo portu 'not implemented' FIRLATMIYOR", async () => {
@@ -83,8 +84,10 @@ describe("⭐ 12 portun demo implementasyonu ÇAĞRILABİLİYOR", () => {
       .resolves.toMatchObject({ ok: true });
     await expect(port("storage").persistBytes({ bytes: new ArrayBuffer(4), kind: "audio", mimeType: "audio/mpeg", vendor: "elevenlabs" }))
       .resolves.toMatchObject({ ok: true });
-    // ⚠ dedupe.embed BİLEREK başarısız — demo modda vektör üretilmez (D3).
-    await expect(port("dedupe").embed("x")).resolves.toMatchObject({ ok: false });
+    // ⚠ dedupe.embed demo modda BİLEREK başarılı — §12 adım 15 revize A3.2
+    // (eskiden hep `not_configured` dönerdi; testlerin mock'suz sınayabilmesi
+    // için değişti, bkz. lib/adapters/demo/dedupe.ts başlığı).
+    await expect(port("dedupe").embed("x", "b1")).resolves.toMatchObject({ ok: true });
   });
 });
 
