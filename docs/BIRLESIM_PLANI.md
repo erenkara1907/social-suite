@@ -1903,6 +1903,13 @@ Her adım tek oturumda bitecek büyüklükte. Çıktı ve "tamamlandı" kriteri 
 | **21** | **Güvenlik kapanışı** — §10'un 16 maddesinin denetimi | Denetim raporu | Her madde ya kapalı ya da gerekçeli erteleme; `security-reviewer` incelemesi CRITICAL/HIGH içermiyor |
 | **22** | **Diğer platformlar** (§8.8) | X / LinkedIn / TikTok | Her biri ayrı oturum; `PUBLISHABLE_PLATFORMS` genişler |
 
+**⭐ GERÇEK UYGULAMA SIRASI (D9 ile değişti) — 15'ten sonra:**
+`... → 15 → 19 → 20 → 16 → 17 → 18 → 21 → 22`
+
+Tablodaki numaralar SABİT (her adım hâlâ kendi numarasıyla anılıyor,
+raporlar ve commit mesajları da öyle); değişen yalnızca hangi numaranın
+HANGİ OTURUMDA yapıldığı. Gerekçe D9'da.
+
 **Kritik yol (D4 ile daraltıldı):**
 `0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → (8, 9, 10 paralel) → 11 → 12 → 14`
 
@@ -2162,3 +2169,39 @@ paragrafı düzeltildi. Ayrıca metin artık iki listeyi ayırıyor:
 - §12 adım sıraları ve numaralandırma.
 - §4c eşikleri, §11 S3'ün "⚠ DOĞRULANMALI · §12 adım 15'ten önce" notu
   (üç yerde de yerinde: §4c, §11 S3, REVİZYON D3).
+
+### D9 — §12 uygulama sırası değişti: 19 → 20 → 16 → 17 → 18 (adım 19 oturumu)
+
+**Sorun:** Planlanan sıra 16→17→18→19→20 idi. Adım 16 (Instagram bağlama)
+ve 17 (yayın) Meta uygulamasının App Review'una ve Instagram tester
+kurulumuna bağlı — bu ikisi bu oturumda **hazır değildi**, yani 16/17
+"canlı doğrulama" kriterini **gerçek bir OAuth akışıyla** karşılayamazdı.
+
+**Neden bu bir kısayol değil, bir erteleme:** ADIM_15_RAPOR.md'nin verdiği
+ders — adım 14'ün canlı doğrulaması bir kısayoldan geçmiş
+(`get_provider_secret()`'in gerçek çağrı yolu adım 15'e kadar hiç
+denenmemiş) ve bulduğu bug adım 15'e kadar saklı kalmış. OAuth'ta AYNI
+hatayı tekrarlamamak şu anlama geliyor: 16/17'yi "kod yazıldı, kısayolla
+kanıtlandı" diyerek işaretlemek yerine, **hazır olduklarında** gerçek bir
+Meta app + gerçek bir tester hesabıyla doğrulanana kadar beklemek.
+
+**Neden 19→20 öne alınabildi:** 19 (medya köprüsü) ve 20'nin (UGC boru
+hattı) canlı doğrulaması Instagram'a bağımlı DEĞİL — 19'un "vendor URL"si
+zaten Supabase Storage'ın kendisiyle (allowlist'in dördüncü üyesi, §10)
+gerçek ağ/gerçek Storage'a karşı kanıtlanabiliyor (bkz. `docs/
+ADIM_19_RAPOR.md`), 20'nin Kie/fal/ElevenLabs entegrasyonu da yalnızca o
+üç sağlayıcının API anahtarlarını gerektiriyor — Meta'nın onay sürecini
+beklemiyor. 18 (metrik toplama) da yalnızca yayınlanmış içerik gerektirir,
+o da Instagram bağlı olmadan test verisiyle ilerleyebilir kısmı ölçüde;
+tam doğrulaması 16/17'den sonra gelir, bu yüzden 18 sırada 17'nin ardında
+kaldı.
+
+**Uygulama:** §12 tablosundaki **adım numaraları DEĞİŞMEDİ** — her adım
+hâlâ kendi numarasıyla anılıyor (raporlar, commit mesajları). Yalnızca
+HANGİ numaranın HANGİ oturumda yapıldığı değişti: `... → 15 → 19 → 20 →
+16 → 17 → 18 → 21 → 22`. §12 tablosunun hemen altına bu sırayı adlandıran
+bir not eklendi.
+
+**Bu revizyonun DEĞİŞTİRMEDİĞİ:** kritik yol metni (§12, "Kritik yol (D4
+ile daraltıldı)") — o metin adım 14'e kadarki sırayı anlatıyor, D9'un
+etkilediği aralığın (15 sonrası) DIŞINDA.
