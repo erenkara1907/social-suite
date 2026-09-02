@@ -1253,7 +1253,16 @@ alter table public.ai_kill_switch enable row level security;
 -- ═════════════════════════════════════════════════════════════════════════════
 
 /* TEK public bucket. Instagram medyayı yayın anında kendisi çekiyor, o yüzden
-   okuma auth'un arkasında olamaz. Yazma ilk klasör segmentine (user_id) bağlı. */
+   okuma auth'un arkasında olamaz. Yazma ilk klasör segmentine (user_id) bağlı.
+
+   ⭐ adım 19 FAZ B — bu karar canlıda YENİDEN doğrulandı (§12 adım 19b):
+   gerçek iki kullanıcı ile media_assets RLS izolasyonu (A görüyor, B
+   görmüyor, service-role satırın gerçekten var olduğunu doğruluyor) VE
+   bucket'ın gerçekten public olduğu (anon, oturumsuz HTTP → 200) ayrı ayrı
+   kanıtlandı — DB satırının marka izolasyonu ile Storage nesnesinin public
+   okunabilirliği İKİ AYRI KATMAN, biri diğerini gevşetmiyor: URL'i bilmeyen
+   biri dosyayı bulamaz, ama satırı (hangi markaya ait, ne zaman üretildi vb.)
+   yalnızca sahibi görür. Kanıt: docs/ADIM_19_RAPOR.md §FAZ B. */
 insert into storage.buckets (id, name, public)
 values ('media', 'media', true)
 on conflict (id) do update set public = true;
