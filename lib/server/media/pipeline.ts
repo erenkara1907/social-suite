@@ -12,7 +12,7 @@ import {
 } from "@/lib/server/media/job-row";
 import { persistBytesAsset } from "@/lib/server/storage";
 import {
-  PERSONA_IMAGE_CREDITS, PERSONA_IMAGE_MODEL, PERSONA_VIDEO_MODEL,
+  CHARS_PER_SECOND, PERSONA_IMAGE_CREDITS, PERSONA_IMAGE_MODEL, PERSONA_VIDEO_MODEL,
   createPersonaImage, createPersonaVideo, estimatePersonaVideoCredits,
   PERSONA_VIDEO_DURATION_DEFAULT, PERSONA_VIDEO_MODE_DEFAULT,
 } from "@/lib/core/providers/kie";
@@ -179,6 +179,20 @@ async function loadVoiceInputs(admin: SupabaseClient, contentItemId: string, per
 
   const script = [item.hook, item.body].map((s) => s.trim()).filter(Boolean).join(" ");
   if (!script) throw new PermanentJobError("voice: içerikte seslendirilecek metin yok (hook/body boş)");
+
+  // ⭐ fal.ts'in deneyle bulunmuş yorumu (satır 44-58) — cut_off modu videoyu
+  // SABİT tutar, uzayan sesin SONUNU keser. Bu yüzden ses, klibin süresini
+  // AŞMAMALI. sahne'nin /api/persona/voice'unun aynı CHARS_PER_SECOND=13
+  // koruması (deneyle ölçülmüş) — burada da uygulanmazsa cut_off cümlenin
+  // ortasında kesilmiş bir video üretir.
+  const clipSeconds = Number(PERSONA_VIDEO_DURATION_DEFAULT);
+  const maxChars = Math.floor(clipSeconds * CHARS_PER_SECOND);
+  if (script.length > maxChars) {
+    throw new PermanentJobError(
+      `voice: metin ~${Math.ceil(script.length / CHARS_PER_SECOND)}sn okunuyor ama klip ${clipSeconds}sn — ` +
+      `${maxChars} karakteri aşmasın (fal cut_off modu sonu keser)`,
+    );
+  }
 
   const { data: persona, error: personaError } = await admin
     .from("personas").select("default_voice_id").eq("id", personaId).maybeSingle<{ default_voice_id: string | null }>();
