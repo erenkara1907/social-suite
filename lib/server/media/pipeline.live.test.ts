@@ -306,4 +306,42 @@ describe.skipIf(!RUN)("ugc_pipeline — uçtan uca canlı boru hattı (adım 20 
     expect(afterCall?.vendor_task_id).toBeNull(); // vendor'a HİÇ gidilmedi
     console.log("[canlı] KANIT — cancelled durumundaki adıma runUgcPipelineStep çağrısı SESSİZCE döndü, vendor_task_id null kaldı (bir sonraki pahalı çağrı yapılmadı)");
   }, 30_000);
+
+  it("TEST 5 (SIFIR maliyet) — eksik API anahtarı: net hata, HİÇ vendor çağrısı yapılmaz", async () => {
+    // Carino Pizza'nın kimlik bilgilerinden BAĞIMSIZ, provider_credentials
+    // satırı OLMAYAN yeni bir marka — resolveProviderCredential() null döner,
+    // dispatchPersonaImage bunu vendor'a hiç gitmeden PermanentJobError'a çevirir.
+    const { data: bareBrand, error: brandError } = await admin
+      .from("brands")
+      .insert({ owner_id: ownerId, name: `adım20-eksik-anahtar-test-${Date.now()}` })
+      .select("id")
+      .single<{ id: string }>();
+    if (brandError || !bareBrand) throw new Error(`test markası oluşturulamadı: ${brandError?.message}`);
+
+    const { data: barePersona, error: personaErr } = await admin
+      .from("personas")
+      .insert({ brand_id: bareBrand.id, user_id: ownerId, name: "eksik anahtar test", prompt: "test" })
+      .select("id")
+      .single<{ id: string }>();
+    if (personaErr || !barePersona) throw new Error(`test persona oluşturulamadı: ${personaErr?.message}`);
+
+    try {
+      await expect(
+        runUgcPipelineStep(
+          { personaId: barePersona.id, step: "persona_image" },
+          { jobId: "live-test-missing-key", brandId: bareBrand.id, userId: ownerId },
+        ),
+      ).rejects.toThrow(/missing_key/);
+
+      // Hata öncesi VENDOR'A gidilmediğinin kanıtı: media_jobs satırı ya HİÇ
+      // yazılmadı ya da queued'da kaldı — running/vendor_task_id asla oluşmadı.
+      const job = await findStepJob(admin, { contentItemId: null, personaId: barePersona.id, step: "persona_image" });
+      expect(job?.vendor_task_id ?? null).toBeNull();
+      console.log("[canlı] KANIT — kie anahtarı yapılandırılmamış markada dispatch PermanentJobError(missing_key) ile durdu, vendor_task_id hiç oluşmadı");
+    } finally {
+      await admin.from("media_jobs").delete().eq("persona_id", barePersona.id);
+      await admin.from("personas").delete().eq("id", barePersona.id);
+      await admin.from("brands").delete().eq("id", bareBrand.id);
+    }
+  }, 30_000);
 });
