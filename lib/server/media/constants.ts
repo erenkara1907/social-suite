@@ -22,10 +22,12 @@ export const MEDIA_POLL_CHAIN_INTERVAL_MS = 15_000;
 /**
  * Zincirleme bu süreden sonra DURUR — ama `media_jobs` satırı `running`'de
  * kalır, `vendor_task_id` korunur (§12 adım 20 FAZ 0.3: "vendor tarafında
- * sonuç varsa sonradan toplanabilmeli"). 20 dakika, ölçülen Kling süresinin
- * (~ADIM_20_RAPOR.md'ye bakın) kabaca 8-10 katı bir pay — lipsync (fal) ve
- * Nano Banana için de aynı sabit kullanılıyor; ikisi de Kling'den hızlı
- * ölçüldüğü için tek, muhafazakâr bir üst sınır yeterli.
+ * sonuç varsa sonradan toplanabilmeli"). Bu oturumda GERÇEK ölçüm (4 canlı
+ * çalıştırma, ADIM_20_RAPOR.md "Gerçek Kling süresi" bölümü): persona_video
+ * (Kling) 179/249/284sn, persona_image (Nano Banana Pro) 76/81/269sn,
+ * lipsync (fal) 83sn — en yavaş adım Kling, 284sn (~4.7dk). 20 dakika bunun
+ * ~4.2 katı bir pay; tek, muhafazakâr bir üst sınır tüm adımlar için yeterli
+ * (lipsync/persona_image ölçülenden zaten daha hızlı).
  */
 export const MEDIA_POLL_MAX_WAIT_MS = 20 * 60_000;
 
