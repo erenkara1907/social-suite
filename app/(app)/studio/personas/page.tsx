@@ -1,6 +1,7 @@
 import { isDemo, port } from "@/lib/adapters";
 import { requestModeOverrides } from "@/lib/server/mode";
 import { countPersonaUsage } from "@/lib/core/derive/media";
+import type { TurkishVoice } from "@/lib/core/providers/elevenlabs";
 import { PersonaStudioView, type PersonaCardView } from "@/components/app/persona-studio-view";
 
 export const metadata = { title: "Personalar" };
@@ -32,6 +33,17 @@ export default async function Page() {
     storagePort.list("image"),
   ]);
 
+  // ⭐ FAZ A — ses seçimi OPSİYONEL (`createPersona`'nın `defaultVoiceId`si
+  // öyle). Marka henüz elevenlabs anahtarı yapılandırmadıysa `listTurkish()`
+  // hata fırlatır (`liveVoice.ts` `apiKeyOrThrow()`) — formu çökertmek yerine
+  // sessizce boş listeyle devam edilir, kullanıcı persona'yı yine oluşturabilir.
+  let voices: TurkishVoice[] = [];
+  try {
+    voices = await port("voice", overrides).listTurkish();
+  } catch {
+    voices = [];
+  }
+
   const imageById = new Map(images.map((asset) => [asset.id, asset]));
 
   const views: PersonaCardView[] = personas.map((persona) => {
@@ -46,5 +58,5 @@ export default async function Page() {
     };
   });
 
-  return <PersonaStudioView personas={views} newPersonaDisabled={isDemo("video", overrides)} />;
+  return <PersonaStudioView personas={views} voices={voices} newPersonaDisabled={isDemo("video", overrides)} />;
 }

@@ -100,4 +100,15 @@ export const demoContent: ContentPort = {
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, limit);
   },
+
+  // §12 adım 20 FAZ C1 — demo modda da KALICI DEĞİL (dosya başlığının aynı
+  // gerekçesi: sunucu tarafında mutasyon istekler arası sızardı). Ekran
+  // kendi iyimser state'ini tutar; bu iki metot yalnızca tip sözleşmesini
+  // doldurur, "seçildi" sayısı sıfır döner.
+  async markUgcRequested() {
+    return { ok: true, data: 0 };
+  },
+  async listUgcRequested() {
+    return [];
+  },
 };

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useActionState } from "react";
 import { useLang } from "@/components/i18n/language-provider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import {
   type PersonaRow,
 } from "@/lib/core/types";
 import { cn } from "@/lib/utils";
+import { generateUgcAction, GENERATE_UGC_INITIAL_STATE } from "@/app/(app)/studio/actions";
 
 /**
  * `/studio` — BIRLESIM_PLANI §12 adım 10 FAZ C. Ürünün en pahalı işlemi.
@@ -173,6 +175,102 @@ function ProductionPreview({ posterUrl }: { posterUrl: string | null }) {
   );
 }
 
+/**
+ * FAZ C1'in üretim sırası satırı — `/plan`'da istenmiş ama henüz `media_jobs`
+ * grubu olmayan bir içerik. Her satır KENDİ `useActionState`'ine sahip;
+ * `generateUgcAction` `step: "persona_video"`den başlar (persona_image
+ * personanın kendisi oluşturulurken zaten yapıldı).
+ */
+function GenerateRow({ item, personas }: { item: ContentItemRow; personas: PersonaRow[] }) {
+  const { ui, t } = useLang();
+  const [state, formAction, pending] = useActionState(generateUgcAction, GENERATE_UGC_INITIAL_STATE);
+  const platform = PLATFORM_META[item.platform];
+  const noPersonas = personas.length === 0;
+
+  return (
+    <Card className="p-4">
+      <form action={formAction} className="space-y-3">
+        <input type="hidden" name="contentItemId" value={item.id} />
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon name={platform.icon} className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="truncate font-medium">{item.title || item.hook}</p>
+          {item && <Badge tone={STATUS_TONE[item.status]}>{t(STATUS_LABEL[item.status])}</Badge>}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            name="personaId"
+            required
+            disabled={noPersonas || pending}
+            defaultValue=""
+            className="h-9 rounded-lg border border-border bg-background px-2 text-sm disabled:opacity-50"
+          >
+            <option value="" disabled>
+              {ui.studioGeneratePersonaPlaceholder}
+            </option>
+            {personas.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" disabled={noPersonas || pending} className="gap-2">
+            <Icon name="sparkles" className="h-4 w-4" />
+            {ui.studioGenerateCta}
+          </Button>
+        </div>
+
+        {noPersonas && <p className="text-sm text-muted-foreground">{ui.studioGenerateNoPersonaHint}</p>}
+        {state.status === "queued" && (
+          <p className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">{ui.studioGenerateQueued}</p>
+        )}
+        {state.status === "error" && (
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {ui.studioGenerateErrorGeneric}
+          </p>
+        )}
+      </form>
+    </Card>
+  );
+}
+
+/** FAZ C1 — `/plan`'da seçilmiş, henüz üretimi başlamamış içerikler. */
+function PendingQueueSection({
+  items,
+  personas,
+  generateEstimateCredits,
+}: {
+  items: ContentItemRow[];
+  personas: PersonaRow[];
+  generateEstimateCredits: number;
+}) {
+  const { ui } = useLang();
+  if (items.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="font-display text-base font-semibold">{ui.studioPendingTitle}</h2>
+        <p className="text-sm text-muted-foreground">{ui.studioPendingHint}</p>
+      </div>
+
+      {/* ⭐ Para harcayan işlem — tıklamadan ÖNCE maliyet uyarısı, adım 20 FAZ C. */}
+      <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
+        <Icon name="triangle-alert" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+        <p className="text-muted-foreground">
+          {ui.studioGenerateCostWarning} <span className="label-mono text-foreground">~{generateEstimateCredits} {ui.studioCreditsUnit}</span>
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {items.map((item) => (
+          <GenerateRow key={item.id} item={item} personas={personas} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProductionCard({ production }: { production: ProductionView }) {
   const { ui, t } = useLang();
   const { item, persona, jobs, posterUrl, credits } = production;
@@ -218,12 +316,22 @@ export function StudioView({
   costRows,
   productions,
   personaCount,
+  personas,
+  pendingItems,
+  generateEstimateCredits,
   generateDisabled,
 }: {
   pipelineSteps: MediaJobStep[];
   costRows: CostRow[];
   productions: ProductionView[];
   personaCount: number;
+  /** FAZ C1 — persona seçici için aktif personalar. */
+  personas: PersonaRow[];
+  /** FAZ C1 — `/plan`'da istenmiş, henüz üretimi başlamamış içerikler. */
+  pendingItems: ContentItemRow[];
+  /** FAZ C — tek üretimin (persona_video + lipsync) tahmini kredi maliyeti. */
+  generateEstimateCredits: number;
+  /** Demo modda düğmeler devre dışı — `generateUgcAction`'ın aynı kontrolü sunucuda da var. */
   generateDisabled: boolean;
 }) {
   const { ui } = useLang();
@@ -244,26 +352,20 @@ export function StudioView({
         </Link>
       </div>
 
-      {/* ⭐ C2 — /plan ile buradaki liste arasındaki kopukluk gizlenmiyor, anlatılıyor. */}
-      <div className="flex items-start gap-2 rounded-xl border border-info/30 bg-info/5 px-4 py-3 text-sm">
-        <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0 text-info" />
-        <p className="text-muted-foreground">{ui.studioLinkNote}</p>
-      </div>
-
       <PipelineExplainer steps={pipelineSteps} costRows={costRows} />
       <CostTable rows={costRows} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{ui.studioGenerateCta}</CardTitle>
-        </CardHeader>
-        <CardContent title={ui.studioGenerateDisabledHint}>
-          <Button type="button" disabled={generateDisabled} className="gap-2">
-            <Icon name="sparkles" className="h-4 w-4" />
-            {ui.studioGenerateCta}
-          </Button>
-        </CardContent>
-      </Card>
+      {/* ⭐ adım 20 FAZ C1 — /plan'daki seçim artık BURADA görünüyor (activity
+       *  tablosundan okunuyor, React state değil). Demo modda düğmeler
+       *  disabled — sunucu tarafında da `generateUgcAction` aynı kontrolü yapar. */}
+      {generateDisabled ? (
+        <div className="flex items-start gap-2 rounded-xl border border-info/30 bg-info/5 px-4 py-3 text-sm">
+          <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+          <p className="text-muted-foreground">{ui.studioGenerateDisabledHint}</p>
+        </div>
+      ) : (
+        <PendingQueueSection items={pendingItems} personas={personas} generateEstimateCredits={generateEstimateCredits} />
+      )}
 
       <div className="space-y-3">
         <div>

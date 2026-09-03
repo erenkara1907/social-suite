@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireBrand } from "@/lib/server/auth";
 import { requestModeOverrides } from "@/lib/server/mode";
-import { isDemo } from "@/lib/adapters";
+import { isDemo, port } from "@/lib/adapters";
 import { enqueue } from "@/lib/server/jobs/enqueue";
 import type { ApiErrorCode } from "@/lib/core/ai/types";
 import type { PlanHorizon } from "@/lib/core/plan/types";
@@ -72,4 +72,43 @@ export async function generatePlanAction(
   // İş kuyruğu paneli (JobsQueueStatus) yeni işi görsün diye.
   revalidatePath("/plan");
   return { status: "queued", errorCode: null, jobId: result.data.id };
+}
+
+/**
+ * "UGC videosu iste" düğmesi — BIRLESIM_PLANI §12 adım 20 FAZ C1.
+ *
+ * ⭐ ADIM_9 varsayım 5'in kapanışı: seçim artık `activity(action=
+ * 'ugc_requested')` satırlarıyla KALICI — sayfa değişince kaybolmuyor.
+ * `/studio` bu satırları `contentPort.listUgcRequested()` ile okuyup
+ * "bekleyen istekler" sırasını gösterir (`app/(app)/studio/page.tsx`).
+ *
+ * Bu, VİDEO ÜRETMEZ — yalnızca "bunu üretmek istiyorum" niyetini kaydeder.
+ * Gerçek üretim (para harcayan adım) `/studio`'daki ayrı bir düğmeyle,
+ * persona seçildikten SONRA başlar (`app/(app)/studio/actions.ts`
+ * `generateUgcAction`) — bu ayrım kasıtlı: seçim ücretsiz, üretim değil.
+ */
+export interface RequestUgcActionState {
+  status: "idle" | "queued" | "error";
+  count: number;
+}
+
+export const REQUEST_UGC_INITIAL_STATE: RequestUgcActionState = { status: "idle", count: 0 };
+
+export async function requestUgcAction(
+  _prev: RequestUgcActionState,
+  formData: FormData,
+): Promise<RequestUgcActionState> {
+  await requireBrand();
+  const overrides = await requestModeOverrides();
+
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  if (ids.length === 0) return { status: "error", count: 0 };
+
+  const contentPort = port("content", overrides);
+  const result = await contentPort.markUgcRequested(ids);
+  if (!result.ok) return { status: "error", count: 0 };
+
+  revalidatePath("/plan");
+  revalidatePath("/studio");
+  return { status: "queued", count: result.data };
 }

@@ -77,6 +77,9 @@ export default async function Page({
 
   const completion = brandCompletionPercent(brand);
   const generateDisabled = isDemo("planner", overrides);
+  // ⭐ adım 20 FAZ C1 — "UGC video iste" düğmesi video portu demo modda ise
+  // kapalı (requestUgcAction'ın kendi kontrolüyle aynı ikinci katman).
+  const ugcDemoMode = isDemo("video", overrides);
 
   return (
     <PlanView
@@ -88,6 +91,7 @@ export default async function Page({
       chains={chains}
       completion={completion}
       generateDisabled={generateDisabled}
+      ugcDemoMode={ugcDemoMode}
       defaultTheme={brand.description || brand.name}
       contentLanguage={brand.contentLanguage}
       jobsSummary={jobsSummary}

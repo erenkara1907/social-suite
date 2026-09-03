@@ -21,22 +21,33 @@ function buildCostRows(): CostRow[] {
   const personaVideoCredits = Number(PERSONA_VIDEO_DURATION_DEFAULT) * PERSONA_VIDEO_CREDITS_PER_SECOND[PERSONA_VIDEO_MODE_DEFAULT];
   return [
     { step: "persona_image", vendor: "Kie · Nano Banana Pro", credits: `${PERSONA_IMAGE_CREDITS}` },
-    { step: "voice", vendor: "ElevenLabs", credits: null },
     { step: "persona_video", vendor: "Kie · Kling 3.0", credits: `~${personaVideoCredits} (${PERSONA_VIDEO_DURATION_DEFAULT}sn)` },
+    { step: "voice", vendor: "ElevenLabs", credits: null },
     { step: "lipsync", vendor: "fal · sync-lipsync", credits: `${LIPSYNC_CREDITS_PER_SECOND}/sn` },
   ];
 }
 
+/** FAZ C — bir "Üret" tıklamasının tahmini maliyeti: `persona_image` hariç
+ *  (personanın kendisi oluşturulurken zaten bir kere yapıldı), `voice` 0
+ *  kredi (ElevenLabs abonelik) — yalnızca persona_video + lipsync sayılır. */
+function estimateGenerateCredits(): number {
+  const personaVideoCredits = Number(PERSONA_VIDEO_DURATION_DEFAULT) * PERSONA_VIDEO_CREDITS_PER_SECOND[PERSONA_VIDEO_MODE_DEFAULT];
+  const lipsyncCredits = Number(PERSONA_VIDEO_DURATION_DEFAULT) * LIPSYNC_CREDITS_PER_SECOND;
+  return personaVideoCredits + lipsyncCredits;
+}
+
 /**
- * `/studio` — BIRLESIM_PLANI §12 adım 10 FAZ C. Ürünün en pahalı işlemi.
+ * `/studio` — BIRLESIM_PLANI §12 adım 10 FAZ C, adım 20 FAZ C1. Ürünün en
+ * pahalı işlemi.
  *
  * Guard'ı `(app)/layout.tsx` sağlıyor; bu dosyada kontrol YOK.
  *
- * ⭐ C2 — `/plan`'ın UGC seçimiyle burası BİLEREK birleştirilmedi (seçim
- * React state'te, sayfa değişince kayboluyor — ADIM_9 varsayım 5).
- * Aşağıdaki üretim listesi zaten kuyruğa girmiş GERÇEK `media_jobs`
- * kayıtlarından geliyor; `StudioView`'daki not bu kopukluğu kullanıcıya
- * açıkça anlatıyor.
+ * ⭐ adım 20 FAZ C1 — ADIM_9 varsayım 5'in KAPANIŞI: `/plan`'daki UGC seçimi
+ * artık `activity(action='ugc_requested')` satırlarıyla KALICI (React
+ * state DEĞİL). `contentPort.listUgcRequested()` bu satırları okur;
+ * henüz bir `media_jobs` grubu olmayanlar "üretim sırası" (`pendingItems`)
+ * olarak gösterilir — `PendingQueueSection` her satırda persona seçip
+ * gerçekten üretimi (`generateUgcAction`) başlatır.
  */
 export default async function Page() {
   const overrides = await requestModeOverrides();
@@ -44,19 +55,30 @@ export default async function Page() {
   const contentPort = port("content", overrides);
   const storagePort = port("storage", overrides);
 
-  const [personas, jobs, images] = await Promise.all([
+  const [personas, jobs, images, requestedIds] = await Promise.all([
     videoPort.listPersonas(),
     videoPort.listAllJobs(),
     storagePort.list(),
+    contentPort.listUgcRequested(),
   ]);
 
   const groups = buildProductions(jobs);
-  const items = await Promise.all(groups.map((g) => contentPort.get(g.contentItemId)));
+  // ⭐ adım 20 FAZ C1 — /plan'da istenmiş (activity: ugc_requested) ama
+  // henüz bir media_jobs grubu olmayan içerikler = üretim sırası.
+  const groupIds = new Set(groups.map((g) => g.contentItemId));
+  const pendingIds = requestedIds.filter((id) => !groupIds.has(id));
+
+  const allContentIds = [...new Set([...groups.map((g) => g.contentItemId), ...pendingIds])];
+  const items = await Promise.all(allContentIds.map((id) => contentPort.get(id)));
 
   const itemById = new Map<string, ContentItemRow>();
   for (const item of items) if (item) itemById.set(item.id, item);
   const personaById = new Map<string, PersonaRow>(personas.map((p) => [p.id, p]));
   const imageById = new Map(images.map((asset) => [asset.id, asset]));
+
+  const pendingItems: ContentItemRow[] = pendingIds
+    .map((id) => itemById.get(id))
+    .filter((row): row is ContentItemRow => Boolean(row));
 
   const productions: ProductionView[] = groups.map((group) => {
     // C4 — tamamlanmış bir adımın sonucu bir görsel/poster ise önizlemede göster.
@@ -73,7 +95,7 @@ export default async function Page() {
     };
   });
 
-  const PIPELINE_STEPS: MediaJobStep[] = ["persona_image", "voice", "persona_video", "lipsync"];
+  const PIPELINE_STEPS: MediaJobStep[] = ["persona_image", "persona_video", "voice", "lipsync"];
 
   return (
     <StudioView
@@ -81,6 +103,9 @@ export default async function Page() {
       costRows={buildCostRows()}
       productions={productions}
       personaCount={personas.length}
+      personas={personas}
+      pendingItems={pendingItems}
+      generateEstimateCredits={estimateGenerateCredits()}
       generateDisabled={isDemo("video", overrides)}
     />
   );

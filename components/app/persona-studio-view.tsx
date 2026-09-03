@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useActionState, useEffect, useState } from "react";
 import { useLang } from "@/components/i18n/language-provider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import type { TurkishVoice } from "@/lib/core/providers/elevenlabs";
+import { DEFAULT_PERSONA_PROMPT_TR } from "@/lib/core/providers/persona-prompt";
+import { createPersonaAction, CREATE_PERSONA_INITIAL_STATE } from "@/app/(app)/studio/personas/actions";
 
 /**
  * `/studio/personas` — BIRLESIM_PLANI §12 adım 10 FAZ B.
@@ -33,14 +37,100 @@ export interface PersonaCardView {
   usedInCount: number;
 }
 
+/** FAZ A — "yeni persona" formu. Prompt textarea `DEFAULT_PERSONA_PROMPT_TR`
+ *  ile başlar (KESIF_SAHNE §9'un elle ayarlanmış metni), kullanıcı isterse
+ *  düzenler. Ses seçimi OPSİYONEL — `createPersona()`'nın `defaultVoiceId`si
+ *  isteğe bağlı, ElevenLabs anahtarı yoksa `voices` boş gelir. */
+function NewPersonaForm({ voices, onCreated }: { voices: TurkishVoice[]; onCreated: () => void }) {
+  const { ui } = useLang();
+  const [state, formAction, pending] = useActionState(createPersonaAction, CREATE_PERSONA_INITIAL_STATE);
+
+  useEffect(() => {
+    if (state.status === "created") onCreated();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onCreated intentionally not tracked, only status transitions should trigger this
+  }, [state.status]);
+
+  return (
+    <Card className="p-4">
+      <form action={formAction} className="space-y-3">
+        <div className="space-y-1.5">
+          <label htmlFor="persona-name" className="text-sm font-medium">
+            {ui.studioNewPersonaNameLabel}
+          </label>
+          <input
+            id="persona-name"
+            name="name"
+            required
+            disabled={pending}
+            className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
+            placeholder={ui.studioNewPersonaNamePlaceholder}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="persona-prompt" className="text-sm font-medium">
+            {ui.studioPersonasPromptLabel}
+          </label>
+          <textarea
+            id="persona-prompt"
+            name="prompt"
+            required
+            disabled={pending}
+            defaultValue={DEFAULT_PERSONA_PROMPT_TR}
+            rows={6}
+            className="w-full rounded-lg border border-border bg-background p-3 font-mono text-xs leading-relaxed"
+          />
+        </div>
+
+        {voices.length > 0 && (
+          <div className="space-y-1.5">
+            <label htmlFor="persona-voice" className="text-sm font-medium">
+              {ui.studioNewPersonaVoiceLabel}
+            </label>
+            <select
+              id="persona-voice"
+              name="defaultVoiceId"
+              disabled={pending}
+              defaultValue=""
+              className="h-9 rounded-lg border border-border bg-background px-2 text-sm"
+            >
+              <option value="">{ui.studioNewPersonaVoiceNone}</option>
+              {voices.map((v) => (
+                <option key={v.voiceId} value={v.voiceId}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <Button type="submit" disabled={pending} className="gap-2">
+          <Icon name="user-plus" className="h-4 w-4" />
+          {ui.studioNewPersona}
+        </Button>
+
+        {state.status === "error" && (
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {ui.studioNewPersonaError}
+          </p>
+        )}
+      </form>
+    </Card>
+  );
+}
+
 export function PersonaStudioView({
   personas,
+  voices,
   newPersonaDisabled,
 }: {
   personas: PersonaCardView[];
+  /** FAZ A — persona oluşturma formunun opsiyonel ses seçici listesi. */
+  voices: TurkishVoice[];
   newPersonaDisabled: boolean;
 }) {
   const { ui } = useLang();
+  const [formOpen, setFormOpen] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -56,11 +146,22 @@ export function PersonaStudioView({
           <h1 className="font-display text-xl font-semibold tracking-tight">{ui.studioPersonasTitle}</h1>
           <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">{ui.studioPersonasHint}</p>
         </div>
-        <Button type="button" variant="outline" disabled={newPersonaDisabled} title={ui.studioNewPersonaDisabledHint} className="gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={newPersonaDisabled}
+          title={newPersonaDisabled ? ui.studioNewPersonaDisabledHint : undefined}
+          onClick={() => setFormOpen((v) => !v)}
+          className="gap-2"
+        >
           <Icon name="user-plus" className="h-4 w-4" />
           {ui.studioNewPersona}
         </Button>
       </div>
+
+      {!newPersonaDisabled && formOpen && (
+        <NewPersonaForm voices={voices} onCreated={() => setFormOpen(false)} />
+      )}
 
       {personas.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">{ui.studioPersonasEmpty}</p>

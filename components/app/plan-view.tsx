@@ -16,7 +16,9 @@ import { CONTENT_LANGUAGE_LABEL, PLATFORM_META, type ContentItemRow, type Lang }
 import type { buildMonthCells, buildWeek } from "@/lib/core/derive/calendar";
 import type { PlanHorizon } from "@/lib/core/plan/types";
 import { AI_ERROR_COPY } from "@/lib/core/ai/error-copy";
-import { generatePlanAction, GENERATE_PLAN_INITIAL_STATE } from "@/app/(app)/plan/actions";
+import {
+  generatePlanAction, GENERATE_PLAN_INITIAL_STATE, requestUgcAction, REQUEST_UGC_INITIAL_STATE,
+} from "@/app/(app)/plan/actions";
 import type { JobsSummary } from "@/lib/server/jobs/status";
 
 type Week = ReturnType<typeof buildWeek>;
@@ -223,9 +225,10 @@ function MonthGrid({ month }: { month: Month }) {
  *    seçim state'ini değiştirir, "Tümünü seç" bile tersinir.
  *  - Demo modda seçim yalnızca `useState`'te yaşar, DB'ye YAZILMAZ.
  */
-function UgcSelectionCard({ items }: { items: ContentItemRow[] }) {
+function UgcSelectionCard({ items, demoMode }: { items: ContentItemRow[]; demoMode: boolean }) {
   const { ui } = useLang();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [state, formAction, pending] = useActionState(requestUgcAction, REQUEST_UGC_INITIAL_STATE);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -257,53 +260,83 @@ function UgcSelectionCard({ items }: { items: ContentItemRow[] }) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {selected.size > 0 && (
-          <p className="label-mono rounded-lg bg-primary/10 px-3 py-2 text-primary">
-            {selected.size} {ui.planUgcSelectedSuffix}
-          </p>
-        )}
+      {/* ⭐ FAZ C1 — kimlikler forma HİDDEN input olarak akar; sunucu tarafı
+          `requestUgcAction` bunları `activity(action='ugc_requested')`
+          olarak KALICI yazar (`/studio` bu kaydı okuyup bekleyen sıraya
+          koyar). Demo modda düğme yine tıklanabilir ama `demoContent.
+          markUgcRequested()` no-op — port zaten savunuyor (§9.1). */}
+      <form action={formAction}>
+        {[...selected].map((id) => (
+          <input key={id} type="hidden" name="ids" value={id} />
+        ))}
+        <CardContent className="space-y-3">
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-primary/10 px-3 py-2">
+              <p className="label-mono text-primary">
+                {selected.size} {ui.planUgcSelectedSuffix}
+              </p>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={pending || demoMode}
+                title={demoMode ? ui.studioGenerateDisabledHint : undefined}
+                className="gap-1.5"
+              >
+                <Icon name={pending ? "loader-circle" : "send"} className={cn("h-3.5 w-3.5", pending && "animate-spin")} />
+                {ui.planUgcRequestCta}
+              </Button>
+            </div>
+          )}
+          {state.status === "queued" && (
+            <p className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">
+              {state.count} {ui.planUgcRequestQueued}
+            </p>
+          )}
+          {state.status === "error" && (
+            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{ui.planUgcRequestError}</p>
+          )}
 
-        {items.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">{ui.planEmpty}</p>
-        ) : (
-          <ul className="space-y-2">
-            {items.map((item) => {
-              const platform = PLATFORM_META[item.platform];
-              const checked = selected.has(item.id);
-              return (
-                <li key={item.id}>
-                  <label
-                    className={cn(
-                      "flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors",
-                      checked ? "border-primary bg-primary/5" : "border-border hover:bg-muted",
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 shrink-0 accent-primary"
-                      checked={checked}
-                      onChange={() => toggle(item.id)}
-                    />
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-                      <Icon name={platform.icon} className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate font-medium">{item.title}</span>
-                        <Badge tone="neutral">
-                          {item.day_offset !== null ? `+${item.day_offset}g` : ""} {item.time_of_day}
-                        </Badge>
+          {items.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">{ui.planEmpty}</p>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((item) => {
+                const platform = PLATFORM_META[item.platform];
+                const checked = selected.has(item.id);
+                return (
+                  <li key={item.id}>
+                    <label
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors",
+                        checked ? "border-primary bg-primary/5" : "border-border hover:bg-muted",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                        checked={checked}
+                        onChange={() => toggle(item.id)}
+                      />
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                        <Icon name={platform.icon} className="h-3.5 w-3.5" />
                       </span>
-                      {item.hook && <span className="mt-0.5 block truncate text-sm text-muted-foreground">{item.hook}</span>}
-                    </span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="truncate font-medium">{item.title}</span>
+                          <Badge tone="neutral">
+                            {item.day_offset !== null ? `+${item.day_offset}g` : ""} {item.time_of_day}
+                          </Badge>
+                        </span>
+                        {item.hook && <span className="mt-0.5 block truncate text-sm text-muted-foreground">{item.hook}</span>}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </form>
     </Card>
   );
 }
@@ -317,6 +350,7 @@ export function PlanView({
   chains,
   completion,
   generateDisabled,
+  ugcDemoMode,
   defaultTheme,
   contentLanguage,
   jobsSummary,
@@ -329,6 +363,9 @@ export function PlanView({
   chains: ChainGroup[];
   completion: number;
   generateDisabled: boolean;
+  /** adım 20 FAZ C1 — video portu demo modda mı (UGC isteği ikinci katman
+   *  savunması, `requestUgcAction`'ın aynı kontrolüyle eşleşir). */
+  ugcDemoMode: boolean;
   defaultTheme: string;
   contentLanguage: Lang;
   /** adım 14 FAZ D — "Planı üret" kuyruğa eklendikten sonra kullanıcının
@@ -370,7 +407,7 @@ export function PlanView({
 
       <ChainCard chains={chains} title={ui.planChainTitle} description={ui.planChainHint} />
 
-      <UgcSelectionCard items={planItems} />
+      <UgcSelectionCard items={planItems} demoMode={ugcDemoMode} />
     </div>
   );
 }
