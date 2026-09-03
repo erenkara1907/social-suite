@@ -880,7 +880,9 @@ medyayı yayın anında **kendisi çekiyor**). Arada köprü yok.
    son adımı: lib/server/storage.ts → persistVendorAsset()
 3. persistVendorAsset:
      a. URL'i SSRF allowlist'ine karşı doğrula (§10) — sadece
-        kieai.redpandaai.co / *.fal.media / api.elevenlabs.io
+        kieai.redpandaai.co / tempfile.aiquickdraw.com / *.fal.media / api.elevenlabs.io
+        (tempfile.aiquickdraw.com adım 20 FAZ B'nin canlı doğrulamasında
+        eklendi — Kie'nin persona_image sonucu GERÇEKTE bu host'tan geldi)
      b. sunucu tarafında indir, boyut sınırı 100MB (video), 25MB (görsel)
      c. Content-Type doğrula (beklenen mime ile eşleşiyor mu)
      d. Supabase Storage'a yükle:
@@ -1703,7 +1705,7 @@ Bu, `/api/persona/image` PUT'un zaten yaptığı desenin aynısı
 indirirken (§4g), host allowlist'i uygulanır:
 
 ```
-izinli: kieai.redpandaai.co · *.fal.media · api.elevenlabs.io
+izinli: kieai.redpandaai.co · tempfile.aiquickdraw.com · *.fal.media · api.elevenlabs.io
 + https zorunlu · yönlendirme takibi kapalı · özel IP aralıkları reddedilir
 + Content-Type beklenenle eşleşmeli · boyut sınırı (görsel 25MB, video 100MB)
 ```

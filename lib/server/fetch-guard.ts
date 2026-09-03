@@ -58,9 +58,15 @@ export class FetchGuardError extends Error {
   }
 }
 
-/** §10: "izinli: kieai.redpandaai.co · *.fal.media · api.elevenlabs.io".
- *  Koda GÖMÜLMEZ — yalnızca env boşsa devreye giren varsayılan. */
-const DEFAULT_VENDOR_ALLOWLIST = ["kieai.redpandaai.co", "*.fal.media", "api.elevenlabs.io"];
+/** §10: "izinli: kieai.redpandaai.co · tempfile.aiquickdraw.com · *.fal.media ·
+ *  api.elevenlabs.io". `tempfile.aiquickdraw.com` adım 20 FAZ B'nin canlı
+ *  doğrulamasında EKLENDİ — Kie'nin persona_image sonucu (Nano Banana Pro)
+ *  varsayılan `kieai.redpandaai.co` DEĞİL, bu host'tan geldi (ADIM_19
+ *  varsayım 2'nin gerçekleştiği an — bkz. ADIM_20_RAPOR.md). Koda GÖMÜLMEZ —
+ *  yalnızca env boşsa devreye giren varsayılan. */
+const DEFAULT_VENDOR_ALLOWLIST = [
+  "kieai.redpandaai.co", "tempfile.aiquickdraw.com", "*.fal.media", "api.elevenlabs.io",
+];
 
 /** Supabase Storage host'u listeye MANUEL eklenmez — `NEXT_PUBLIC_SUPABASE_URL`'den
  *  türetilir. Böylece "koda gömme" kuralı bu host için de geçerli kalır. */
