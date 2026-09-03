@@ -80,12 +80,28 @@ export interface CaptionWritePayload {
   contentItemId: string;
 }
 
+/**
+ * ⚠ adım 20 FAZ B — `contentItemId`/`script`/`voiceId` OPSİYONEL oldu.
+ * Sebep: `step='persona_image'` bağımsız çalışabiliyor (`/studio/personas`
+ * "yeni persona" akışı — henüz bir içerik yok, yalnızca persona'nın karesi
+ * üretiliyor). Diğer üç adım (`persona_video`/`voice`/`lipsync`) bir
+ * içeriğe bağlı olmak ZORUNDA — bu, tip sisteminde değil, işleyicide
+ * (`lib/server/media/pipeline.ts`) doğrulanır (payload birleşik `AnyJob`
+ * için tek bir arayüz kalması DRY'ı korur, ayrı payload tipleri step başına
+ * gereksiz bir dallanma olurdu).
+ *
+ * Her `ugc_pipeline` işi TEK bir adımı yürütür — bir sonraki adım, bu
+ * adımın vendor sonucu `media_poll` ile hazır olduğunda AYRI bir
+ * `ugc_pipeline` işi olarak kuyruğa girer (bkz. `lib/server/media/pipeline.ts`
+ * başlığı). Bu, "3. aşamada patlayan iş 1-2'yi TEKRARLAMAZ" garantisinin
+ * KAYNAĞI: tamamlanmış adımlar zaten `jobs` tablosunda `succeeded` ayrı
+ * satırlar, retry SADECE kendi satırının (kendi adımının) `attempts`'ini
+ * artırır.
+ */
 export interface UgcPipelinePayload {
-  contentItemId: string;
   personaId: string;
-  script: string;
-  voiceId: string;
   step: MediaJobStep;
+  contentItemId?: string;
 }
 
 export interface MediaPollPayload {

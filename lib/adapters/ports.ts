@@ -73,6 +73,19 @@ export interface ContentPort {
   archive(id: string): Promise<ApiResult<ContentItemRow>>;
   /** Son aktiviteler — `/dashboard`'ın sağ sütunu. */
   listActivity(limit?: number): Promise<ActivityRow[]>;
+  /**
+   * ⭐ adım 20 FAZ C1 — `/plan`'ın UGC seçimini KALICI hâle getirir.
+   * `activity(action='ugc_requested')` yazar; şema zaten bu action'ı
+   * tanımlıyordu (`00_schema.sql` CHECK listesi) ama yazan hiçbir kod yoktu
+   * (ADIM_9 varsayım 5). Idempotent DEĞİL — aynı id iki kez işaretlenirse iki
+   * satır yazılır (log semantiği), `listUgcRequested()` okurken tekilleştirir.
+   */
+  markUgcRequested(contentItemIds: readonly string[]): Promise<ApiResult<number>>;
+  /** `action='ugc_requested'` olan, HENÜZ üretime girmemiş içerik id'leri
+   *  (tekil) — "girmiş mi" ayrımı çağıranın işi (`buildProductions()`'un
+   *  zaten var olan gruplarıyla karşılaştırılır, §9.1 "türetme adapter'da
+   *  değil" ilkesi). */
+  listUgcRequested(): Promise<string[]>;
 }
 
 export interface ContentQuery {
@@ -198,9 +211,14 @@ export interface VideoPort {
 export interface VideoJobInput {
   contentItemId: string;
   personaId: string;
-  /** Seslendirilecek metin. `MAX_SCRIPT_CHARS` sınırı live tarafta doğrulanır. */
-  script: string;
-  voiceId: string;
+  /**
+   * ⚠ adım 20 FAZ B — `script`/`voiceId` KASITLI olarak burada YOK.
+   * `voice` adımı seslendirilecek metni `content_items.hook/body`'den,
+   * sesi `personas.default_voice_id`'den DISPATCH ANINDA türetir
+   * (`lib/server/media/pipeline.ts` `loadVoiceInputs()`) — enqueue anında
+   * bir "script snapshot" almak, kullanıcı üretim isteğinden SONRA caption'ı
+   * düzenlerse bayat metni seslendirirdi.
+   */
   step: MediaJobStep;
 }
 

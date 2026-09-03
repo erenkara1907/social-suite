@@ -16,7 +16,7 @@ const ELEVENLABS_BASE = `${ELEVENLABS_HOST}/v1`;
 const ELEVENLABS_BASE_V2 = `${ELEVENLABS_HOST}/v2`;
 
 /** Multilingual — the scripts in this kit are Turkish as often as English. */
-const VOICE_MODEL = "eleven_multilingual_v2";
+export const VOICE_MODEL = "eleven_multilingual_v2";
 const OUTPUT_FORMAT = "mp3_44100_128";
 
 /** ISO 639-1, the code ElevenLabs labels Turkish voices with. */

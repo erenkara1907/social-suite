@@ -13,14 +13,17 @@ import { skeletonToContentItems } from "@/lib/core/plan/calendar";
 import { createDedupeRunBudget, runDedupeCheck } from "@/lib/server/dedupe/run";
 import { getBrandForJob } from "@/lib/server/jobs/context";
 import { runAnthropicCall } from "@/lib/server/ai/run-provider-call";
+import { runUgcPipelineStep } from "@/lib/server/media/pipeline";
+import { pollMediaJob } from "@/lib/server/media/poll";
 
 /**
  * İşleyici kaydı — BIRLESIM_PLANI §12 adım 14 FAZ C.
  *
- * `plan_generate` ve `caption_write` bu adımda dolduruldu — ürünün ilk
- * gerçek Anthropic çağrıları. Kalan altısı hâlâ `NOT_IMPLEMENTED`
- * (adım 15/16/17/18/20'nin işi, `lib/core/jobs/types.ts`'in adım eşlemesi
- * yorumuna bakın).
+ * `plan_generate` ve `caption_write` adım 14'te dolduruldu (ilk gerçek
+ * Anthropic çağrıları); `ugc_pipeline`/`media_poll` adım 20'de (gövdeleri
+ * `lib/server/media/{pipeline,poll}.ts`'te — bu dosya yalnızca kaydeder).
+ * Kalan dördü hâlâ `NOT_IMPLEMENTED` (adım 16/17/18'in işi,
+ * `lib/core/jobs/types.ts`'in adım eşlemesi yorumuna bakın).
  */
 const NOT_IMPLEMENTED = "işleyici henüz yazılmadı (adım 15+)";
 
@@ -272,12 +275,8 @@ export const JOB_HANDLERS: {
 } = {
   plan_generate: handlePlanGenerate,
   caption_write: handleCaptionWrite,
-  async ugc_pipeline() {
-    throw new PermanentJobError(NOT_IMPLEMENTED);
-  },
-  async media_poll() {
-    throw new PermanentJobError(NOT_IMPLEMENTED);
-  },
+  ugc_pipeline: runUgcPipelineStep,
+  media_poll: pollMediaJob,
   async publish() {
     throw new PermanentJobError(NOT_IMPLEMENTED);
   },

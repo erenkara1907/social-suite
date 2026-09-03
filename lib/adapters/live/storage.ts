@@ -13,17 +13,15 @@
  * burası hiçbiri değil, RLS'ten (owns_brand + Storage foldername politikası)
  * geçerek yazar.
  *
- * `persistBytes` — HENÜZ YAZILMADI: doğrudan bayt yükleme (`/library`'nin
- * elle yükleme akışı) 11b'ye ERTELENMİŞ bir ekran, bu adımın kapsamı
- * vendor URL köprüsü (§4g). `list` marka bazlı gerçek bir sorgu.
+ * `persistBytes` — §12 adım 20 FAZ B'de dolduruldu (`persistBytesAsset()`,
+ * ugc_pipeline'ın `voice` adımının ihtiyacıyla birlikte yazıldı — ElevenLabs
+ * ham bayt döner, indirilecek bir URL yok). `list` marka bazlı gerçek bir sorgu.
  */
 import type { StoragePort } from "@/lib/adapters/ports";
 import { requireBrand } from "@/lib/server/auth";
 import { createClient } from "@/lib/supabase/server";
-import { persistVendorAsset } from "@/lib/server/storage";
+import { persistBytesAsset, persistVendorAsset } from "@/lib/server/storage";
 import type { MediaAssetRow } from "@/lib/core/types";
-
-const NOT_IMPLEMENTED = "not implemented";
 
 interface MediaAssetDbRow {
   id: string;
@@ -52,8 +50,17 @@ export const liveStorage: StoragePort = {
       vendor: input.vendor,
     });
   },
-  async persistBytes() {
-    throw new Error(NOT_IMPLEMENTED);
+  async persistBytes(input) {
+    const { user, brand } = await requireBrand();
+    const supabase = await createClient();
+    return persistBytesAsset(supabase, {
+      brandId: brand.id,
+      userId: user.id,
+      bytes: input.bytes,
+      kind: input.kind,
+      mimeType: input.mimeType,
+      vendor: input.vendor,
+    });
   },
   async list(kind) {
     const { brand } = await requireBrand();

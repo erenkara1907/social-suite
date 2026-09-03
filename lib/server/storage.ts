@@ -159,6 +159,106 @@ async function findExistingByUrl(
   return data ? toMediaAssetRow(data) : null;
 }
 
+export interface PersistBytesInput {
+  brandId: string;
+  userId: string;
+  bytes: ArrayBuffer;
+  kind: MediaKind;
+  mimeType: string;
+  vendor: MediaSourceVendor | null;
+  mediaJobId?: string;
+}
+
+/**
+ * §12 adım 20 FAZ B — `persistVendorAsset`'in bayt kardeşi. ElevenLabs'ın
+ * TTS uç noktası bir URL değil, ham mp3 baytları döner (`synthesizeSpeech()`
+ * dönüşü) — indirilecek bir vendor URL'i yok, o yüzden `guardedFetch` devreye
+ * girmiyor (SSRF riski de yok: baytlar zaten güvenilir bir sağlayıcı
+ * çağrısından geldi, kullanıcı girdisi değil).
+ *
+ * İdempotency `persistVendorAsset` ile AYNI desen (`mediaJobId` → önce
+ * `findExistingByJob`, sonra koşullu UPDATE ile kazanan/kaybeden ayrımı) —
+ * kod tekrarı burada BİLİNÇLİ: iki fonksiyonun "kaynak" adımı (fetch vs.
+ * doğrudan bayt) kalıcı olarak farklı, ortak bir üçüncü soyutlama bu tek
+ * farkı gizlemek için gereğinden karmaşık bir sarmalayıcı gerektirirdi.
+ */
+export async function persistBytesAsset(
+  supabase: SupabaseClient,
+  input: PersistBytesInput,
+): Promise<ApiResult<MediaAssetRow>> {
+  const { brandId, userId, bytes, kind, mimeType, vendor, mediaJobId } = input;
+
+  try {
+    if (mediaJobId) {
+      const existing = await findExistingByJob(supabase, mediaJobId);
+      if (existing) return { ok: true, data: existing };
+    }
+
+    if (bytes.byteLength === 0) throw new Error("boş bayt dizisi — üretim başarısız olmuş olabilir");
+    if (bytes.byteLength > MAX_BYTES_BY_KIND[kind]) {
+      throw new Error(`bayt sınırını aştı (>${MAX_BYTES_BY_KIND[kind]} bayt)`);
+    }
+
+    const ext = EXTENSION_BY_CONTENT_TYPE[mimeType.split(";")[0]?.trim().toLowerCase() ?? ""] ?? "bin";
+    const objectId = crypto.randomUUID();
+    const storagePath = `${userId}/${brandId}/${kind}/${objectId}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(storagePath, bytes, { contentType: mimeType || "application/octet-stream", upsert: false });
+    if (uploadError) throw new Error(`storage yüklemesi başarısız: ${uploadError.message}`);
+
+    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("media_assets")
+      .insert({
+        brand_id: brandId,
+        user_id: userId,
+        kind,
+        storage_path: storagePath,
+        public_url: pub.publicUrl,
+        mime_type: mimeType,
+        bytes: bytes.byteLength,
+        source_vendor: vendor,
+        source_url: null,
+      })
+      .select("id,brand_id,kind,storage_path,public_url,mime_type,bytes,width,height,duration_ms,source_vendor,created_at")
+      .single<MediaAssetDbRow>();
+
+    if (insertError || !inserted) {
+      await supabase.storage.from(BUCKET).remove([storagePath]).catch(() => {});
+      throw new Error(`media_assets yazılamadı: ${insertError?.message ?? "boş yanıt"}`);
+    }
+
+    let winner = toMediaAssetRow(inserted);
+
+    if (mediaJobId) {
+      const { data: locked, error: lockError } = await supabase
+        .from("media_jobs")
+        .update({ result_asset_id: winner.id, state: "succeeded", finished_at: new Date().toISOString() })
+        .eq("id", mediaJobId)
+        .is("result_asset_id", null)
+        .select("id")
+        .maybeSingle<{ id: string }>();
+      if (lockError) throw new Error(`media_jobs güncellenemedi: ${lockError.message}`);
+
+      if (!locked) {
+        await supabase.storage.from(BUCKET).remove([storagePath]).catch(() => {});
+        await supabase.from("media_assets").delete().eq("id", winner.id);
+        const actual = await findExistingByJob(supabase, mediaJobId);
+        if (actual) winner = actual;
+      }
+    }
+
+    return { ok: true, data: winner };
+  } catch (err) {
+    const message = (err as Error).message;
+    if (mediaJobId) await markJobFailed(supabase, mediaJobId, message).catch(() => {});
+    return { ok: false, error: { code: "storage_error", detail: message } };
+  }
+}
+
 async function markJobFailed(supabase: SupabaseClient, mediaJobId: string, message: string): Promise<void> {
   await supabase
     .from("media_jobs")
