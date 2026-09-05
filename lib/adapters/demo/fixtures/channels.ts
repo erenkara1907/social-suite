@@ -33,6 +33,9 @@ export const DEMO_CHANNELS: ChannelRow[] = [
     growth: 4.8,
     engagement: 5.2,
     is_connected: true,
+    // Bağlı olduğu için §12 adım 18'in metrik toplayıcısı bunu düzenli
+    // doldurur varsayımıyla makul bir demo zamanı — gerçek bir tarih değil.
+    last_synced_at: "2026-09-04T07:15:00.000Z",
   },
   {
     id: DEMO_CHANNEL_IDS.linkedin,
@@ -42,6 +45,7 @@ export const DEMO_CHANNELS: ChannelRow[] = [
     growth: 2.1,
     engagement: 3.4,
     is_connected: false,
+    last_synced_at: null,
   },
   {
     id: DEMO_CHANNEL_IDS.x,
@@ -51,6 +55,7 @@ export const DEMO_CHANNELS: ChannelRow[] = [
     growth: -0.6,
     engagement: 1.9,
     is_connected: false,
+    last_synced_at: null,
   },
   {
     id: DEMO_CHANNEL_IDS.tiktok,
@@ -60,6 +65,7 @@ export const DEMO_CHANNELS: ChannelRow[] = [
     growth: 11.3,
     engagement: 7.6,
     is_connected: false,
+    last_synced_at: null,
   },
   {
     id: DEMO_CHANNEL_IDS.youtube,
@@ -69,5 +75,6 @@ export const DEMO_CHANNELS: ChannelRow[] = [
     growth: 6.2,
     engagement: 2.8,
     is_connected: false,
+    last_synced_at: null,
   },
 ];

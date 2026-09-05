@@ -241,5 +241,6 @@ export function buildChannels(rows: ChannelRow[], posts: ContentItemRow[]): Chan
     scheduled: queued.get(c.id) ?? 0,
     engagement: Number(c.engagement),
     connected: c.is_connected,
+    lastSyncedAt: c.last_synced_at,
   }));
 }

@@ -341,6 +341,9 @@ export interface ChannelRow {
   growth: number;
   engagement: number;
   is_connected: boolean;
+  /** `00_schema.sql` `channels.last_synced_at` — metrik toplayıcı doldurur
+   *  (§12 adım 18). Bağlı ama hiç senkron edilmemişse `null`. */
+  last_synced_at: string | null;
 }
 
 export interface MetricRow {
@@ -425,6 +428,7 @@ export interface ChannelAccount {
   scheduled: number;
   engagement: number;
   connected: boolean;
+  lastSyncedAt: string | null;
 }
 
 export interface QueueItem {

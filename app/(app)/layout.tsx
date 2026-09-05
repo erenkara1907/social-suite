@@ -31,14 +31,16 @@ import type { ModuleName } from "@/app.config";
  *     adım 9'da kalır". Yalnızca marka profili bölümüyle; entegrasyon
  *     rozetleri ve API anahtarı bölümü 11b / adım 13.
  *
- * 11b'ye ertelenen üçü (`library`, `composer`, `channels`) burada YOK.
- * Rotaları da yok; menüye eklenmeleri tek satırlık bir değişiklik olacak.
+ * 11b'nin ekranları FAZ sırasıyla eklenir. `channels` FAZ A'da eklendi;
+ * `library` (FAZ B) ve `composer` (FAZ C) kendi fazlarında birer satırlık
+ * eklemeyle gelecek.
  */
 const SHELL_MODULES: readonly ModuleName[] = [
   "dashboard",
   "plan",
   "queue",
   "studio",
+  "channels",
   "analytics",
   "settings",
 ];

@@ -268,8 +268,8 @@ describe("buildChains — adım 9 C4", () => {
 
 describe("buildChannels", () => {
   const rows: ChannelRow[] = [
-    { id: "c1", platform: "instagram", handle: "@kahve", followers: 1500, growth: 1.2, engagement: 3.4, is_connected: true },
-    { id: "c2", platform: "x", handle: "@kahve", followers: 400, growth: -0.5, engagement: 1.1, is_connected: false },
+    { id: "c1", platform: "instagram", handle: "@kahve", followers: 1500, growth: 1.2, engagement: 3.4, is_connected: true, last_synced_at: "2026-09-01T08:00:00.000Z" },
+    { id: "c2", platform: "x", handle: "@kahve", followers: 400, growth: -0.5, engagement: 1.1, is_connected: false, last_synced_at: null },
   ];
 
   it("boş kanal listesinde boş dizi verir", () => {
@@ -303,5 +303,11 @@ describe("buildChannels", () => {
     const [ig, x] = buildChannels(rows, []);
     expect(ig.connected).toBe(true);
     expect(x.connected).toBe(false);
+  });
+
+  it("lastSyncedAt alanını last_synced_at'tan taşır", () => {
+    const [ig, x] = buildChannels(rows, []);
+    expect(ig.lastSyncedAt).toBe("2026-09-01T08:00:00.000Z");
+    expect(x.lastSyncedAt).toBeNull();
   });
 });
