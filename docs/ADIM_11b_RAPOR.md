@@ -101,3 +101,59 @@ gerekçe — envanterin son açık satırı.
 **Doğrulama:** `npx playwright test` — 13/13 geçti (önceki 9 + bu fazın
 4 yenisi). `npx tsc --noEmit` / `npm run lint` / `npm run test` (538 geçti)
 hepsi temiz.
+
+---
+
+## FAZ E — Müşteriye görünen tarafın senkronizasyonu
+
+### E1. Yeniden deploy
+
+Kullanıcı onayı alındıktan sonra `vercel --prod` ile `main`'in ucu
+(commit `a4e5585`) canlıya alındı. Alan adı değişmedi:
+**https://app-gold-one-92.vercel.app**
+
+| Doğrulama | Yöntem | Sonuç |
+|---|---|---|
+| Build başarılı | `vercel --prod` çıktısı | `Build Completed`, `readyState: "READY"` — `/channels`, `/composer`, `/library` yeni rotalar listede |
+| `APP_MODE=demo` korunuyor | `vercel env ls production` | `APP_MODE` hâlâ `Secret` tipinde, `Production` ortamına atanmış (7 gün önce ayarlanmış, bu oturumda DEĞİŞTİRİLMEDİ) |
+| Kayıt kapalı | `POST /auth/v1/signup` doğrudan Supabase'e | `422 signup_disabled` — ADIM_11'in açık bıraktığı C2 artık KAPALI (ne zaman kapatıldığı dokümante değil, muhtemelen elle) |
+| Cron 5/5 pasif | `psql "$SUPABASE_DB_URL" -c "select jobname, active from cron.job"` | Beş job da (`sm-worker/publish/metrics/token-refresh/reaper`) `active = f` |
+| Üretim bundle'ında `sm:mode:` yok | `/login` sayfasının `_next/static` JS chunk'ları indirilip grep'lendi (11 dosya) | Sıfır eşleşme |
+| Dokuz ekran canlıda geziliyor | Gerçek bir hesapla (service-role ile kurulup görüşme sonunda silindi) giriş yapılıp `/dashboard, /plan, /queue, /studio, /library, /channels, /analytics, /composer, /settings` tek tek ziyaret edildi | Hepsi HTTP 200, `DemoBanner` her birinde görünür. Ekran görüntüleri `docs/demo/live-*.png` (altısı yenilendi, üçü — channels/composer/library — yeni) |
+
+Doğrulama scripti (geçici Playwright config + spec) kalıcı bir test
+olarak BIRAKILMADI — üretim URL'ine karşı çalışan bir test CI'da tehlikeli
+olurdu (gerçek kullanıcı oluşturur/siler); tek seferlik kanıt olarak
+çalıştırılıp silindi. Aynı doğrulama gerektiğinde tekrarlanabilir
+(yöntem yukarıdaki tabloda yazılı).
+
+### E2. `DEMO_SENARYOSU.md` güncellemesi
+
+Baştan yazıldı — adım 11'de yazıldığında "hiçbir şey canlı değil" diyordu,
+bugün doğru değil. Güncellenen ana noktalar:
+
+- Sunum sırası artık 13 adım (10'dan): `/composer`, `/library`, `/channels`
+  eklendi, ürünün kendi akışına (plan → yaz/üret → onayla → ölç → kanal/
+  kütüphane/ayarlar) göre yerleştirildi.
+- MVP tablosu her madde için ✅/⚠ durumu taşıyor artık — hangisi "GERÇEK
+  her modda", hangisi "GERÇEK canlı modda, demo modda placeholder",
+  hangisi "kabuk, postponed".
+- Dürüstlük bölümü adım 11'den beri KAPANAN kopuklukları (UGC seçimi
+  kalıcılığı, API anahtarı yönetimi) ve YENİ açık maddeleri (composer'ın
+  tekrar-uyarı kararı) ayrı ayrı işaretliyor.
+- Instagram sorusu artık "neden" (Meta App Review) ve "ne zaman" (belirsiz,
+  Meta'nın sürecine bağlı; MVP arada tek uygulama + tester modeli) ile
+  cevaplanıyor — önceki hâli yalnızca "adım 16-17" diyordu.
+- Maliyet SSS'i `UGC_MALIYET_NOTU.md`'nin özetini taşıyor: birim
+  maliyetler (persona görseli 24 kredi bir kez, video başına 135 kredi +
+  ~$0.42, 30 video/ay ≈ 4.074 kredi + $12.60) tabloya döküldü. **Kie
+  kredisinin $ karşılığı BİLEREK boş bırakıldı** — uydurulmadı.
+- Kontrol listesi iki yeni gerçek bulguyla güncellendi: kayıt artık kapalı
+  (doğrulandı), ve veritabanında artık SIFIR değil BİR kullanıcı var
+  (`eren@gmail.com` / "Carino Pizza" markası — canlı vendor testleri için
+  kurulmuş görünüyor, sunum hesabı olarak kullanılıp kullanılmayacağı
+  netleştirilmeli).
+
+**FAZ E DOĞRULAMA — tamam:** canlı URL'de dokuz ekran çalışıyor (kanıt
+yukarıda); kayıt kapalı (kanıt yukarıda); cron pasif (kanıt yukarıda);
+`DEMO_SENARYOSU.md` güncel.
