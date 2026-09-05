@@ -157,3 +157,117 @@ bugün doğru değil. Güncellenen ana noktalar:
 **FAZ E DOĞRULAMA — tamam:** canlı URL'de dokuz ekran çalışıyor (kanıt
 yukarıda); kayıt kapalı (kanıt yukarıda); cron pasif (kanıt yukarıda);
 `DEMO_SENARYOSU.md` güncel.
+
+---
+
+## FAZ F — Kapanış
+
+### Beş kapı
+
+| Kapı | Komut | Sonuç |
+|---|---|---|
+| Tip kontrolü | `npx tsc --noEmit` | EXIT=0, çıktı yok |
+| Derleme | `npm run build` (Turbopack) | Başarılı — 18 sayfa (`/channels`, `/composer`, `/library` dahil), ƒ (dinamik) |
+| Lint | `npm run lint` | 0 hata, 1 önceden var olan ilgisiz uyarı (`skeleton.test.ts`, bu oturumda dokunulmadı) |
+| Birim testler | `npm run test` | 538 geçti, 31 bilinçli atlandı (37 dosya, 28+9) |
+| e2e | `npx playwright test` | **13/13 geçti** (9 önceki + composer/library/studio-personas/studio-generate-preflight) |
+
+### Sır sızıntısı taraması
+
+`git diff f60c06e..HEAD` (bu oturumun tüm commit'leri) üzerinde:
+- Bilinen anahtar önekleri (`sk-ant-`, `sk-proj-`, `sk_live`, `AIza…`,
+  Slack `xox…`, PEM private key başlığı) → **sıfır eşleşme**.
+- Genel `key/secret/token/password = "..."` deseni → yalnızca test
+  fixture'ları (`e2e-invalid-kie-key-…`, `voyage-e2e-fake-key-…`,
+  `randomUUID()`) — hiçbiri gerçek bir kimlik bilgisi değil.
+- Dokunulan dosya adlarında `.env`, `.pem`, `.key`, keystore, credential
+  dosyası → yok.
+
+**Sonuç: temiz.**
+
+---
+
+## SON RAPOR — özet
+
+Bu bölüm, görevin istediği altı maddeyi tek yerde topluyor; her biri
+yukarıdaki ilgili FAZ bölümüne bağlanıyor.
+
+1. **FAZ 0'ın iki envanteri** — §0.1 ("use server" denetimi, sıfır ihlal)
+   ve §0.2 (tıklanmamış yollar, dört boşluk) yukarıda, FAZ 0 başlığı
+   altında.
+2. **FAZ D'de bulunan hata sayısı ve türleri** — **SIFIR** C1 sınıfı hata.
+   Dört gerçek tıklamanın (persona oluşturma, kimlik doğrulama testi, UGC
+   ön kontrolü, çıkış) hepsi ilk denemede uygulama tarafında sorunsuz
+   çalıştı; yalnızca test YAZIMINDA iki locator belirsizliği bulunup
+   düzeltildi (buton etiketi çakışması, `role="status"` çakışması) —
+   bunlar test kalitesi meselesi, uygulama hatası değil.
+3. **`/composer`'ın tekrar kontrolü kararı ve gerekçesi** — **UYARIR,
+   ENGELLEMEZ.** Gerekçe: adım 15'in motoru toplu/otomatik üretim
+   (`plan_generate`) için tasarlandı, orada "reddet" doğru; composer'da
+   tek satırı elle yazan bir insan bilinçli tekrar isteyebilir (mevsimlik
+   hatırlatma, A/B varyasyonu) — "reddet" onun kararını gasp ederdi.
+   Fingerprint yine de HER ZAMAN hesaplanıp yazılıyor (verdict'ten
+   bağımsız), böylece bu satır sonraki bir kontrolde görünür kalıyor; tam
+   kod ve yorum: `app/(app)/composer/actions.ts`.
+4. **`/library`'nin RLS izolasyon kanıtı** — `e2e/library.spec.ts`: B
+   markasının oturumuyla A markasının `media_assets` satırına doğrudan
+   sorgu **sıfır satır** döndürdü (`error: null`, `dönen satır: 0`) VE
+   B'nin `/library` sayfasında A'nın kartı **hiç görünmedi**. Silme sonrası
+   hem depolama nesnesi hem DB satırı admin sorgusuyla doğrulanmış şekilde
+   temiz.
+5. **Canlı deploy doğrulamaları** — FAZ E1: build başarılı, `APP_MODE=demo`
+   korunuyor, kayıt kapalı (`422 signup_disabled`), cron 5/5 pasif, bundle'da
+   `sm:mode:` yok, dokuz ekran HTTP 200 + `DemoBanner` görünür
+   (`docs/demo/live-*.png`).
+6. **Varsayımlar + Meta hazır olduğunda 16-17-18 için bilmem gerekenler:**
+
+   **Bu oturumun varsayımları:**
+   - `liveChannel.list()` artık GERÇEK bir okuma (önceden `NOT_IMPLEMENTED`
+     fırlatıyordu) — `/channels`'ın canlı modda render edebilmesi için
+     gerekliydi. `startConnect`/`disconnect` KASITLI olarak dokunulmadı.
+   - `ChannelRow`/`ChannelAccount`'a `last_synced_at`/`lastSyncedAt`
+     eklendi — şemadaki kolonla hizalamak için. Bugün hiçbir yazıcı bu
+     kolonu doldurmuyor (demo fixture hariç); gerçek doldurucu adım 18'in
+     metrik toplayıcısı olacak (şema yorumu zaten bunu söylüyor).
+   - `StoragePort`'a `remove()` eklendi — yalnızca `/library` kullanıyor,
+     adım 16-18'in kapsamına girmiyor ama arayüz artık bu metodu taşıyor.
+   - `/composer`'ın yazma yolu demo/live mod anahtarına HİÇ GİRMİYOR
+     (marka formuyla aynı gerekçe) — ileride composer'a dokunacak bir adım
+     bunun FARKLI bir desen olduğunu bilmeli.
+   - `runDedupeCheck()` (adım 15, önceden yalnızca service-role admin
+     istemcisiyle, `plan_generate` işleyicisinden çağrılıyordu) artık
+     oturum istemcisiyle de çağrılıyor (composer). `find_similar_content()`
+     RPC'sinin GÜVENLİK TANIMLAYICISI (`security definer`) içinde
+     `owns_brand(p_brand_id)` kontrolü YOK — bugün güvenli çünkü tek
+     çağıran (composer) `brand_id`'yi her zaman `requireBrand()`'den
+     alıyor, kullanıcıdan asla doğrudan almıyor. **İleride bu RPC'yi
+     çağıran YENİ bir yol eklenirse, `brand_id`'nin İSTEMCİDEN gelmediğini
+     garanti etmek çağıranın sorumluluğu** — RPC'nin kendisi bunu
+     zorlamıyor.
+   - Kayıt (sign-up) canlıda kapalı bulundu ama NE ZAMAN/KİM tarafından
+     kapatıldığı bu oturumda dokümante edilmedi (muhtemelen elle,
+     Supabase panelinden). Veritabanında artık bir hesap var
+     (`eren@gmail.com` / "Carino Pizza") — canlı vendor testleri için
+     kurulmuş görünüyor; gerçek API anahtarları girilmiş olabilir, dikkatli
+     olunmalı (yanlışlıkla gerçek üretim tetiklenmemeli).
+
+   **Meta hazır olduğunda (adım 16-17-18) bilinmesi gerekenler:**
+   - `/channels` ekranı ZATEN gerçek `channels` tablosunu okuyor
+     (brand-scoped, RLS'ten geçiyor) — adım 16 bu ekranı YENİDEN YAZMAK
+     ZORUNDA DEĞİL. Yalnızca `liveChannel.startConnect()`/`disconnect()`'i
+     doldurup, `components/app/channels-view.tsx`'teki "Bağla" düğmesinin
+     bugün SABİT `disabled` olan halini (`willConnectSoon` dalı) gerçek
+     bir `startConnect()` çağrısına bağlaması yeterli.
+   - `PublisherPort.publish()` hâlâ `NOT_IMPLEMENTED` (adım 17). `/queue`
+     ekranındaki Onayla/Ertele/İptal düğmeleri (`queue-view.tsx`)
+     `disabled` sabit — bu 11b'nin kapsamı DIŞINDA bırakıldı (görev metni
+     bunu istemedi), ama adım 17 devreye girdiğinde açılması gereken
+     doğal bir sonraki UI boşluğu bu.
+   - `channels.last_synced_at` kolonu VAR ve `/channels` onu ZATEN
+     gösteriyor — adım 18'in metrik toplayıcısı bu kolonu doldurmaya
+     başladığı an ekranda hiçbir değişiklik gerekmeden görünür olacak.
+   - MVP kararı gereği (BIRLESIM_PLANI §1.12) tüm markalar başlangıçta TEK
+     bir Meta uygulamasına tester olarak eklenecek — marka bazlı
+     `provider_credentials` satırı (kendi Meta app'ini getiren müşteri)
+     yalnızca App Review çıktıktan SONRA anlamlı olacak bir yol; şema
+     buna zaten hazır (D2 kararı), kod tarafı adım 16'da yazılacak.
