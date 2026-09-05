@@ -20,7 +20,7 @@
 import type { StoragePort } from "@/lib/adapters/ports";
 import { requireBrand } from "@/lib/server/auth";
 import { createClient } from "@/lib/supabase/server";
-import { persistBytesAsset, persistVendorAsset } from "@/lib/server/storage";
+import { deleteMediaAsset, persistBytesAsset, persistVendorAsset } from "@/lib/server/storage";
 import type { MediaAssetRow } from "@/lib/core/types";
 
 interface MediaAssetDbRow {
@@ -74,5 +74,10 @@ export const liveStorage: StoragePort = {
     const { data, error } = await query.returns<MediaAssetDbRow[]>();
     if (error) throw new Error(`media_assets listelenemedi: ${error.message}`);
     return data ?? [];
+  },
+  async remove(id) {
+    const { brand } = await requireBrand();
+    const supabase = await createClient();
+    return deleteMediaAsset(supabase, { brandId: brand.id, assetId: id });
   },
 };

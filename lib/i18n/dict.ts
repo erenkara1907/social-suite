@@ -279,6 +279,18 @@ export const ui = {
     channelsNeverSynced: "Hiç yenilenmedi",
     channelsConnectCta: "Bağla",
     channelsConnectDisabledHint: "Instagram bağlama yakında.",
+    // ── 11b FAZ B: /library ─────────────────────────────────────────────
+    libraryTitle: "Kütüphane",
+    libraryHint: "Üretilen ve yüklenen tüm medya — yalnızca bu markaya ait.",
+    libraryHintDemo: "Demo modda örnek medya gösteriliyor — gerçek dosyalar üretildikçe burada birikir.",
+    libraryUnlinked: "Bağlantısız",
+    libraryAudioPreview: "Ses önizlemesi",
+    libraryDelete: "Sil",
+    libraryDeleting: "Siliniyor…",
+    libraryDeleteError: "Silinemedi, tekrar dene.",
+    libraryDeleteDisabledHint: "Demo modda devre dışı — canlı moda geçince açılır.",
+    libraryEmpty: "Henüz medya yok.",
+    libraryEmptyHint: "Stüdyoda üretilen görsel/video/ses ve elle yüklenen dosyalar burada listelenir.",
   },
   en: {
     features: "Features",
@@ -543,6 +555,18 @@ export const ui = {
     channelsNeverSynced: "Never synced",
     channelsConnectCta: "Connect",
     channelsConnectDisabledHint: "Instagram connecting coming soon.",
+    // ── 11b FAZ B: /library ─────────────────────────────────────────────
+    libraryTitle: "Library",
+    libraryHint: "Every generated and uploaded media file — this brand's only.",
+    libraryHintDemo: "Demo mode shows sample media — real files pile up here as they're produced.",
+    libraryUnlinked: "Unlinked",
+    libraryAudioPreview: "Audio preview",
+    libraryDelete: "Delete",
+    libraryDeleting: "Deleting…",
+    libraryDeleteError: "Could not delete, try again.",
+    libraryDeleteDisabledHint: "Disabled in demo mode — unlocks in live mode.",
+    libraryEmpty: "No media yet.",
+    libraryEmptyHint: "Images/video/audio produced in Studio and manually uploaded files show up here.",
   },
 } satisfies Record<Lang, Record<string, string>>;
 

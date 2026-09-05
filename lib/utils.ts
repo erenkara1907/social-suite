@@ -24,6 +24,16 @@ export function formatDate(d: Date | string, opts?: Intl.DateTimeFormatOptions) 
   ).format(date);
 }
 
+/** ⭐ 11b FAZ B — `/library`'nin boyut sütunu. `media_assets.bytes` ham bayt
+ *  tutuyor; 1024 tabanlı (KB/MB), ondalık bir hane. */
+export function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** exponent;
+  return `${exponent === 0 ? value : value.toFixed(1)} ${units[exponent]}`;
+}
+
 export function formatRelative(d: Date | string) {
   const date = typeof d === "string" ? new Date(d) : d;
   const diff = Date.now() - date.getTime();

@@ -354,6 +354,12 @@ export interface StoragePort {
   persistFromUrl(input: PersistFromUrlInput): Promise<ApiResult<MediaAssetRow>>;
   persistBytes(input: PersistBytesInput): Promise<ApiResult<MediaAssetRow>>;
   list(kind?: MediaKind): Promise<MediaAssetRow[]>;
+  /**
+   * ⭐ 11b FAZ B — `/library`'nin silme yolu. Depolama nesnesi + DB kaydı
+   * BİRLİKTE gider (adım 19'un `persistVendorAsset`'teki temizlik deseninin
+   * tersi yönü): yetim dosya ya da yetim satır kalmaz.
+   */
+  remove(id: string): Promise<ApiResult<void>>;
 }
 
 export interface PersistFromUrlInput {

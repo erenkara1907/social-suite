@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildProductions, countPersonaUsage, totalCredits } from "@/lib/core/derive/media";
+import { buildProductions, countPersonaUsage, findAssetLink, totalCredits } from "@/lib/core/derive/media";
 import type { MediaJobRow } from "@/lib/core/types";
 
 const BASE: Omit<MediaJobRow, "id" | "content_item_id" | "persona_id" | "step" | "state" | "created_at"> = {
@@ -150,5 +150,30 @@ describe("totalCredits", () => {
       job({ id: "j2", step: "lipsync", state: "succeeded", credits_estimated: 600, credits_charged: 567 }),
     ];
     expect(totalCredits(jobs)).toBe(567);
+  });
+});
+
+describe("findAssetLink", () => {
+  it("eşleşen iş yoksa null döner (elle yüklenen/bağlantısız dosya)", () => {
+    expect(findAssetLink("a1", [])).toBeNull();
+  });
+
+  it("result_asset_id eşleşen işin content/persona kimliğini döner", () => {
+    const jobs = [
+      job({ id: "j1", step: "lipsync", state: "succeeded", content_item_id: "c1", persona_id: "p1", result_asset_id: "a1" }),
+    ];
+    expect(findAssetLink("a1", jobs)).toEqual({ contentItemId: "c1", personaId: "p1" });
+  });
+
+  it("persona kurulum işi (content_item_id null) için personaId dolu, contentItemId null döner", () => {
+    const jobs = [
+      job({ id: "j1", step: "persona_image", state: "succeeded", content_item_id: null, persona_id: "p1", result_asset_id: "a1" }),
+    ];
+    expect(findAssetLink("a1", jobs)).toEqual({ contentItemId: null, personaId: "p1" });
+  });
+
+  it("başka bir asset'in işini eşleştirmez", () => {
+    const jobs = [job({ id: "j1", step: "voice", state: "succeeded", result_asset_id: "other" })];
+    expect(findAssetLink("a1", jobs)).toBeNull();
   });
 });

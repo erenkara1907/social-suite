@@ -78,3 +78,25 @@ export function countPersonaUsage(jobs: readonly MediaJobRow[], personaId: strin
 export function totalCredits(jobs: readonly MediaJobRow[]): number {
   return jobs.reduce((sum, j) => sum + (j.credits_charged ?? j.credits_estimated), 0);
 }
+
+export interface AssetLink {
+  contentItemId: string | null;
+  personaId: string | null;
+}
+
+/**
+ * ⭐ 11b FAZ B — `/library`'nin "bağlı olduğu içerik" sütunu. Bir
+ * `media_assets` satırının hangi üretim işinden geldiğini `media_jobs.
+ * result_asset_id` eşleşmesiyle bulur (§4d — `media_assets` = kalıcı dosya,
+ * `media_jobs` = üretim denemesi, bkz. `fixtures/media.ts` başlığı).
+ *
+ * Eşleşme yoksa `null` — elle yüklenen bir dosya (`source_vendor: "upload"`)
+ * ya da hiçbir işe bağlanmamış bir varlık demektir; ekran bunu "bağlantısız"
+ * gösterir. `persistVendorAsset`'in idempotency kilidi bir asset'i birden
+ * fazla işe bağlamayı engeller, o yüzden ilk eşleşme yeterli.
+ */
+export function findAssetLink(assetId: string, jobs: readonly MediaJobRow[]): AssetLink | null {
+  const job = jobs.find((j) => j.result_asset_id === assetId);
+  if (!job) return null;
+  return { contentItemId: job.content_item_id, personaId: job.persona_id };
+}

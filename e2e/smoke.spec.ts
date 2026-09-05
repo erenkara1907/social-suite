@@ -18,6 +18,7 @@ const MODULES = [
   { path: "/queue", expectStub: false },
   { path: "/studio", expectStub: false },
   { path: "/studio/personas", expectStub: false },
+  { path: "/library", expectStub: false },
   { path: "/channels", expectStub: false },
   { path: "/analytics", expectStub: false },
   { path: "/settings", expectStub: false },

@@ -43,4 +43,11 @@ export const demoStorage: StoragePort = {
     const assets = demoMediaAssets(new Date());
     return kind ? assets.filter((a) => a.kind === kind) : assets;
   },
+  // §12 adım 20 FAZ C1'in `markUgcRequested`'ıyla aynı gerekçe: demo modda
+  // KALICI DEĞİL — fixture salt okunur, sunucu tarafı mutasyon istekler
+  // arası sızardı. `/library`'nin silme düğmesi demo modda zaten `disabled`
+  // (ikinci katman savunması); bu yalnızca tip sözleşmesini doldurur.
+  async remove() {
+    return { ok: true, data: undefined };
+  },
 };

@@ -40,6 +40,7 @@ const SHELL_MODULES: readonly ModuleName[] = [
   "plan",
   "queue",
   "studio",
+  "library",
   "channels",
   "analytics",
   "settings",

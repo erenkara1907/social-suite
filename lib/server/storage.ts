@@ -266,6 +266,48 @@ async function markJobFailed(supabase: SupabaseClient, mediaJobId: string, messa
     .eq("id", mediaJobId);
 }
 
+export interface DeleteMediaAssetInput {
+  brandId: string;
+  assetId: string;
+}
+
+/**
+ * §12 adım 11b FAZ B — `/library`'nin silme yolu. adım 19'un
+ * `persistVendorAsset`'teki temizlik deseninin TERSİ: orada "satır
+ * yazılamazsa dosyayı sil" vardı, burada "önce dosyayı sil, sonra satırı".
+ *
+ * Sıra bilinçli: depolama nesnesi ÖNCE silinir. Başarısız olursa hiçbir şey
+ * değişmemiş olur (satır + dosya hâlâ tutarlı). Depolama silme başarılı
+ * olduktan SONRA satır silinemezse (nadir — ağ kesintisi gibi) geriye
+ * "dosyası olmayan bir satır" kalır; bu, "satırı olmayan bir dosya"dan
+ * (görünmez, hiç temizlenmeyen depolama israfı) daha iyi bir başarısızlık
+ * modu — kullanıcı kırık bir önizleme görür ve tekrar silmeyi dener, oysa
+ * ters sıradaki hata sessizce depolama israfı biriktirirdi.
+ */
+export async function deleteMediaAsset(
+  supabase: SupabaseClient,
+  input: DeleteMediaAssetInput,
+): Promise<ApiResult<void>> {
+  const { brandId, assetId } = input;
+
+  const { data: asset, error: findError } = await supabase
+    .from("media_assets")
+    .select("id,storage_path")
+    .eq("id", assetId)
+    .eq("brand_id", brandId)
+    .maybeSingle<{ id: string; storage_path: string }>();
+  if (findError) return { ok: false, error: { code: "storage_error", detail: findError.message } };
+  if (!asset) return { ok: false, error: { code: "not_found" } };
+
+  const { error: removeError } = await supabase.storage.from(BUCKET).remove([asset.storage_path]);
+  if (removeError) return { ok: false, error: { code: "storage_error", detail: removeError.message } };
+
+  const { error: deleteError } = await supabase.from("media_assets").delete().eq("id", assetId).eq("brand_id", brandId);
+  if (deleteError) return { ok: false, error: { code: "storage_error", detail: deleteError.message } };
+
+  return { ok: true, data: undefined };
+}
+
 /**
  * Vendor'ın geçici URL'ini indirir, `media` bucket'ına yazar, `media_assets`
  * satırını oluşturur. `mediaJobId` verilirse işi de günceller.
