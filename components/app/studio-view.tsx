@@ -226,7 +226,9 @@ function GenerateRow({ item, personas }: { item: ContentItemRow; personas: Perso
         )}
         {state.status === "error" && (
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {ui.studioGenerateErrorGeneric}
+            {/* ⭐ adım 20.5 FAZ A — ön kontrol hangi maddede takıldıysa (detail)
+             *  onu gösterir; yalnızca beklenmeyen bir hata olduğunda genel mesaja düşer. */}
+            {state.detail ?? ui.studioGenerateErrorGeneric}
           </p>
         )}
       </form>
@@ -320,6 +322,7 @@ export function StudioView({
   pendingItems,
   generateEstimateCredits,
   generateDisabled,
+  missingCredentials,
 }: {
   pipelineSteps: MediaJobStep[];
   costRows: CostRow[];
@@ -333,6 +336,9 @@ export function StudioView({
   generateEstimateCredits: number;
   /** Demo modda düğmeler devre dışı — `generateUgcAction`'ın aynı kontrolü sunucuda da var. */
   generateDisabled: boolean;
+  /** ⭐ adım 20.5 FAZ A — markanın eksik ugc_pipeline sağlayıcı anahtarları
+   *  (kie/elevenlabs/fal). Boşsa banner hiç görünmez. */
+  missingCredentials: string[];
 }) {
   const { ui } = useLang();
 
@@ -354,6 +360,23 @@ export function StudioView({
 
       <PipelineExplainer steps={pipelineSteps} costRows={costRows} />
       <CostTable rows={costRows} />
+
+      {/* ⭐ adım 20.5 FAZ A — "kullanıcı üretime basmadan ÖNCE eksikleri
+       *  görsün": generateUgcAction aynı kontrolü tıklandığında da yapar
+       *  (defense-in-depth), bu banner tıklamadan ÖNCE önler. */}
+      {missingCredentials.length > 0 && (
+        <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+          <Icon name="triangle-alert" className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <p className="text-muted-foreground">
+            {ui.studioMissingCredentialsHint}{" "}
+            <span className="label-mono text-foreground">{missingCredentials.join(", ")}</span>
+            {" — "}
+            <Link href="/settings" className="text-primary hover:underline">
+              {ui.studioMissingCredentialsCta}
+            </Link>
+          </p>
+        </div>
+      )}
 
       {/* ⭐ adım 20 FAZ C1 — /plan'daki seçim artık BURADA görünüyor (activity
        *  tablosundan okunuyor, React state değil). Demo modda düğmeler

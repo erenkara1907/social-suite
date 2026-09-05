@@ -13,12 +13,13 @@ import {
 import { persistBytesAsset } from "@/lib/server/storage";
 import {
   CHARS_PER_SECOND, PERSONA_IMAGE_CREDITS, PERSONA_IMAGE_MODEL, PERSONA_VIDEO_MODEL,
-  createPersonaImage, createPersonaVideo, estimatePersonaVideoCredits,
+  createPersonaImage, createPersonaVideo, estimatePersonaVideoCredits, maxScriptCharsForClip,
   PERSONA_VIDEO_DURATION_DEFAULT, PERSONA_VIDEO_MODE_DEFAULT,
 } from "@/lib/core/providers/kie";
 import { VOICE_MODEL, synthesizeSpeech } from "@/lib/core/providers/elevenlabs";
 import { FAL_LIPSYNC_MODEL, createFalLipsync } from "@/lib/core/providers/fal";
 import { PERSONA_VIDEO_MOTION_PROMPT_EN } from "@/lib/server/media/constants";
+import { checkUgcPreflight } from "@/lib/server/media/preflight";
 
 /**
  * `ugc_pipeline` işleyicisinin gövdesi — BIRLESIM_PLANI §12 adım 20 FAZ B2.
@@ -186,7 +187,7 @@ async function loadVoiceInputs(admin: SupabaseClient, contentItemId: string, per
   // koruması (deneyle ölçülmüş) — burada da uygulanmazsa cut_off cümlenin
   // ortasında kesilmiş bir video üretir.
   const clipSeconds = Number(PERSONA_VIDEO_DURATION_DEFAULT);
-  const maxChars = Math.floor(clipSeconds * CHARS_PER_SECOND);
+  const maxChars = maxScriptCharsForClip(PERSONA_VIDEO_DURATION_DEFAULT);
   if (script.length > maxChars) {
     throw new PermanentJobError(
       `voice: metin ~${Math.ceil(script.length / CHARS_PER_SECOND)}sn okunuyor ama klip ${clipSeconds}sn — ` +
@@ -298,7 +299,25 @@ export async function runUgcPipelineStep(payload: UgcPipelinePayload, ctx: JobCo
     return;
   }
 
+  // ⭐ BIRLESIM_PLANI §12 adım 20.5 FAZ A — ön kontrol kapısı. Kill switch
+  // (assertNotPaused, zaten vardı) + BU adımdan zincirin sonuna kadar
+  // gereken TÜM kimlik bilgileri + metin uzunluğu + persona ön koşulları —
+  // HEPSİ vendor'a hiç gitmeden, TEK yerde. Amaç: ADIM_20'de 2/3 numaralı
+  // denemelerin yaptığı hatayı (persona_video'yu İKİ KEZ ödeyip SONRA
+  // voice adımında ucuz bir kontrole takılmak) yapısal olarak imkânsız
+  // kılmak — `dispatchPersonaVideo` kie çağrısından ÖNCE, zincirin geri
+  // kalanının (voice/lipsync) da geçeceğini bilmeden kie'yi hiç çağırmaz.
   await assertNotPaused(admin);
+  const preflightIssues = await checkUgcPreflight(admin, {
+    brandId: ctx.brandId,
+    persona: { imageAssetId: persona.image_asset_id },
+    fromStep: payload.step,
+    contentItemId,
+    personaId: payload.personaId,
+  });
+  if (preflightIssues.length > 0) {
+    throw new PermanentJobError(`preflight: ${preflightIssues.map((i) => i.message).join("; ")}`);
+  }
 
   switch (payload.step) {
     case "persona_image":

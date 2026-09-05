@@ -187,6 +187,17 @@ export function estimatePersonaVideoCredits(
   };
 }
 
+/**
+ * BIRLESIM_PLANI §12 adım 20.5 FAZ A — fal'in `cut_off` modu videoyu sabit
+ * tutar, uzayan sesin SONUNU keser (`fal.ts:29-58`); ses klibin süresini
+ * AŞMAMALI. Tek kaynak: `pipeline.ts`'in `loadVoiceInputs`i (dispatch anında,
+ * kesin doğrulama) ve `preflight.ts`'in aynı hesabı (zincir başında,
+ * erken/ücretsiz doğrulama) İKİSİ DE bunu çağırır — sınır tek yerde yaşar.
+ */
+export function maxScriptCharsForClip(duration: PersonaVideoDuration = PERSONA_VIDEO_DURATION_DEFAULT): number {
+  return Math.floor(Number(duration) * CHARS_PER_SECOND);
+}
+
 /** Queues the persona frame. Returns in well under a minute. */
 export async function createPersonaImage(prompt: string, apiKey: string): Promise<string> {
   const data = await kieRequest<{ taskId: string }>(`${KIE_BASE}/jobs/createTask`, apiKey, {

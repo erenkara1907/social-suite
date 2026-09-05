@@ -1,12 +1,17 @@
 import { isDemo, port } from "@/lib/adapters";
 import { requestModeOverrides } from "@/lib/server/mode";
+import { requireBrand } from "@/lib/server/auth";
+import { isProviderConfigured } from "@/lib/server/credentials";
 import { buildProductions, totalCredits } from "@/lib/core/derive/media";
+import type { UgcVendor } from "@/lib/core/media/preflight";
 import {
   LIPSYNC_CREDITS_PER_SECOND, PERSONA_IMAGE_CREDITS, PERSONA_VIDEO_CREDITS_PER_SECOND,
   PERSONA_VIDEO_DURATION_DEFAULT, PERSONA_VIDEO_MODE_DEFAULT,
 } from "@/lib/core/providers/kie";
 import type { ContentItemRow, MediaJobStep, PersonaRow } from "@/lib/core/types";
 import { StudioView, type CostRow, type ProductionView } from "@/components/app/studio-view";
+
+const UGC_VENDORS: UgcVendor[] = ["kie", "elevenlabs", "fal"];
 
 export const metadata = { title: "Stüdyo" };
 
@@ -54,6 +59,16 @@ export default async function Page() {
   const videoPort = port("video", overrides);
   const contentPort = port("content", overrides);
   const storagePort = port("storage", overrides);
+
+  // ⭐ adım 20.5 FAZ A — "kullanıcı üretime basmadan ÖNCE eksikleri görsün":
+  // markanın ugc_pipeline'ın ihtiyaç duyduğu üç sağlayıcıdan (kie/elevenlabs/
+  // fal) hangisi eksikse burada, tıklamadan ÖNCE listelenir. Yalnızca "satır
+  // var mı" sorusu — anahtarın kendisi asla okunmaz (credentials.ts'in
+  // `isProviderConfigured`'ı, aynı fonksiyon `/settings` rozetinin de
+  // kullandığı).
+  const { brand } = await requireBrand();
+  const credentialChecks = await Promise.all(UGC_VENDORS.map((v) => isProviderConfigured(brand.id, v)));
+  const missingCredentials = UGC_VENDORS.filter((_, i) => !credentialChecks[i]);
 
   const [personas, jobs, images, requestedIds] = await Promise.all([
     videoPort.listPersonas(),
@@ -107,6 +122,7 @@ export default async function Page() {
       pendingItems={pendingItems}
       generateEstimateCredits={estimateGenerateCredits()}
       generateDisabled={isDemo("video", overrides)}
+      missingCredentials={missingCredentials}
     />
   );
 }
