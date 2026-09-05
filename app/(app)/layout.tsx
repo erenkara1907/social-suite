@@ -43,6 +43,7 @@ const SHELL_MODULES: readonly ModuleName[] = [
   "library",
   "channels",
   "analytics",
+  "composer",
   "settings",
 ];
 

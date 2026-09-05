@@ -20,6 +20,7 @@ const MODULES = [
   { path: "/studio/personas", expectStub: false },
   { path: "/library", expectStub: false },
   { path: "/channels", expectStub: false },
+  { path: "/composer", expectStub: false },
   { path: "/analytics", expectStub: false },
   { path: "/settings", expectStub: false },
 ] as const;
