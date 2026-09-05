@@ -22,6 +22,10 @@ import { isProviderConfigured } from "@/lib/server/credentials";
  * Demo mod ikinci katman savunması: `StudioView`'daki düğme zaten
  * `disabled`, ama bir server action her zaman doğrudan POST edilebilir —
  * `requestUgcAction`/`generatePlanAction` ile aynı ihtiyat.
+ *
+ * ⚠ adım 20.5 FAZ C1 — başlangıç state sabiti BURADA DEĞİL, `StudioView`'da
+ * (bkz. `app/(app)/plan/actions.ts`'in aynı düzeltmesi: "use server"
+ * dosyaları yalnızca async fonksiyon export edebilir).
  */
 export interface GenerateUgcActionState {
   status: "idle" | "queued" | "error";
@@ -30,12 +34,6 @@ export interface GenerateUgcActionState {
    *  kullanıcıya ONU söyler (genel bir "hata oluştu" değil). */
   detail: string | null;
 }
-
-export const GENERATE_UGC_INITIAL_STATE: GenerateUgcActionState = {
-  status: "idle",
-  errorCode: null,
-  detail: null,
-};
 
 interface PersonaPreflightRow {
   image_asset_id: string | null;

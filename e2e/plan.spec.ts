@@ -27,21 +27,27 @@ test.describe("plan", () => {
     // ⭐ C1 — 1 haftalık ufuk her zaman 8 slot verir (WEEKLY_TEMPLATE sabit,
     // hangi günden başlarsa başlasın — lib/core/plan/template.test.ts'in
     // "hangi günden başlarsa başlasın 7 günlük ufuk sekiz slot verir" bulgusu).
+    // Bu, TAKVİM ÖNİZLEMESİNİN (planItems, AI önizlemesi) slot sayısı —
+    // aşağıdaki checkbox'lardan (ugcCandidates, GERÇEK/demo içerik) AYRI bir
+    // sayı (adım 20.5 FAZ C1 düzeltmesi: ikisi artık bağımsız kaynaklar).
     await expect(page.getByText(/^8 slot(s)?$/)).toBeVisible();
 
-    // Her checkbox satırı bir slot — sayı tutarlı olmalı.
-    await expect(page.locator('input[type="checkbox"]')).toHaveCount(8);
+    // ⭐ Checkbox'lar artık `ugcCandidates`'ten (gerçek/demo content_items,
+    // ufuktan BAĞIMSIZ) geliyor — sabit bir sayı İDDİA EDİLMİYOR, yalnızca
+    // her satırın kendi checkbox'ına sahip olduğu (iç tutarlılık) doğrulanıyor.
+    const candidateRows = page.locator('label:has(input[type="checkbox"])');
+    const weekCheckboxCount = await page.locator('input[type="checkbox"]').count();
+    expect(await candidateRows.count()).toBe(weekCheckboxCount);
 
     // Aylık ufka geç.
     await page.getByRole("link", { name: /1 (ay|month)/ }).click();
     await page.waitForURL("**/plan?horizon=30");
 
-    // ⭐ Aylık ufuk her zaman haftalıktan daha kalabalık — tam sayı başlangıç
-    // gününe göre değiştiği için burada sabit bir sayı İDDİA EDİLMİYOR
-    // (ADIM_34'ün "~39 değil 35" bulgusu tam olarak bunun için: gerçek sayı
-    // ölçülmeli, varsayılmamalı). Sadece haftalıktan büyük olduğu doğrulanıyor.
+    // ⭐ Aylık ufkun takvim önizlemesi haftalıktan daha kalabalık (aynı
+    // ADIM_34 bulgusu — tam sayı varsayılmıyor); checkbox sayısı ise
+    // DEĞİŞMEMELİ (ugcCandidates ufuktan bağımsız, aynı içerik listesi).
     const monthCheckboxCount = await page.locator('input[type="checkbox"]').count();
-    expect(monthCheckboxCount).toBeGreaterThan(8);
+    expect(monthCheckboxCount).toBe(weekCheckboxCount);
 
     // ⭐ C3 — üç içerik seç, sayaç 3 göstersin.
     const checkboxes = page.locator('input[type="checkbox"]');

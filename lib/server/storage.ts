@@ -236,7 +236,7 @@ export async function persistBytesAsset(
     if (mediaJobId) {
       const { data: locked, error: lockError } = await supabase
         .from("media_jobs")
-        .update({ result_asset_id: winner.id, state: "succeeded", finished_at: new Date().toISOString() })
+        .update({ result_asset_id: winner.id, state: "succeeded", error: null, finished_at: new Date().toISOString() })
         .eq("id", mediaJobId)
         .is("result_asset_id", null)
         .select("id")
@@ -341,7 +341,7 @@ export async function persistVendorAsset(
     if (mediaJobId) {
       const { data: locked, error: lockError } = await supabase
         .from("media_jobs")
-        .update({ result_asset_id: winner.id, state: "succeeded", finished_at: new Date().toISOString() })
+        .update({ result_asset_id: winner.id, state: "succeeded", error: null, finished_at: new Date().toISOString() })
         .eq("id", mediaJobId)
         .is("result_asset_id", null)
         .select("id")

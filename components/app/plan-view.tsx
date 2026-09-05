@@ -17,8 +17,15 @@ import type { buildMonthCells, buildWeek } from "@/lib/core/derive/calendar";
 import type { PlanHorizon } from "@/lib/core/plan/types";
 import { AI_ERROR_COPY } from "@/lib/core/ai/error-copy";
 import {
-  generatePlanAction, GENERATE_PLAN_INITIAL_STATE, requestUgcAction, REQUEST_UGC_INITIAL_STATE,
+  generatePlanAction, requestUgcAction,
+  type GeneratePlanActionState, type RequestUgcActionState,
 } from "@/app/(app)/plan/actions";
+
+// ⭐ adım 20.5 FAZ C1 — başlangıç state sabitleri BURADA, actions.ts'te DEĞİL
+// (bkz. o dosyanın başlığındaki "use server" kısıtı yorumu — bu sabitler
+// oradan taşındı, canlı Playwright'ta bulunan gerçek bir çökmeyi kapattı).
+const GENERATE_PLAN_INITIAL_STATE: GeneratePlanActionState = { status: "idle", errorCode: null, jobId: null };
+const REQUEST_UGC_INITIAL_STATE: RequestUgcActionState = { status: "idle", count: 0 };
 import type { JobsSummary } from "@/lib/server/jobs/status";
 
 type Week = ReturnType<typeof buildWeek>;
@@ -345,6 +352,7 @@ export function PlanView({
   horizonDays,
   planTitle,
   planItems,
+  ugcCandidates,
   week,
   month,
   chains,
@@ -357,7 +365,15 @@ export function PlanView({
 }: {
   horizonDays: PlanHorizon;
   planTitle: string;
+  /** Anlık AI önizlemesi (`plannerPort.generate()`, KALICILAŞMAZ) — yalnızca
+   *  takvim görünümü (`WeekGrid`/`MonthGrid`) için, sentetik id taşır. */
   planItems: ContentItemRow[];
+  /** ⭐ adım 20.5 FAZ C1 düzeltmesi — GERÇEK, kalıcı satırlar (`contentPort.
+   *  list()`), yayına henüz gitmemiş ve daha önce istenmemiş olanlar.
+   *  `UgcSelectionCard`'ın TEK veri kaynağı — `planItems` DEĞİL, çünkü
+   *  onun sentetik id'leri `activity.content_item_id` (gerçek uuid FK)
+   *  yazımını canlı modda patlatıyordu (bu adımda bulundu ve kapatıldı). */
+  ugcCandidates: ContentItemRow[];
   week: Week | null;
   month: Month | null;
   chains: ChainGroup[];
@@ -407,7 +423,7 @@ export function PlanView({
 
       <ChainCard chains={chains} title={ui.planChainTitle} description={ui.planChainHint} />
 
-      <UgcSelectionCard items={planItems} demoMode={ugcDemoMode} />
+      <UgcSelectionCard items={ugcCandidates} demoMode={ugcDemoMode} />
     </div>
   );
 }

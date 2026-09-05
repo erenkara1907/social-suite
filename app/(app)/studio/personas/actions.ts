@@ -15,18 +15,16 @@ import type { PersonaRow } from "@/lib/core/types";
  * — bu action ikinci bir enqueue YAPMAZ, yalnızca form verisini geçirir.
  * Kill switch/rate limit kontrolü `createPersona()`'nın içindeki
  * `enqueue()`'da zaten var.
+ *
+ * ⚠ adım 20.5 FAZ C1 — başlangıç state sabiti BURADA DEĞİL, `PersonaStudioView`'da
+ * (bkz. `app/(app)/plan/actions.ts`'in aynı düzeltmesi: "use server"
+ * dosyaları yalnızca async fonksiyon export edebilir).
  */
 export interface CreatePersonaActionState {
   status: "idle" | "created" | "error";
   errorCode: ApiErrorCode | null;
   persona: Pick<PersonaRow, "id" | "name"> | null;
 }
-
-export const CREATE_PERSONA_INITIAL_STATE: CreatePersonaActionState = {
-  status: "idle",
-  errorCode: null,
-  persona: null,
-};
 
 export async function createPersonaAction(
   _prev: CreatePersonaActionState,

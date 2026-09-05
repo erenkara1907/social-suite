@@ -50,7 +50,7 @@ async function completePersonaImage(admin: SupabaseClient, job: MediaJobDbRow, o
 async function completePersonaVideo(admin: SupabaseClient, job: MediaJobDbRow, outputUrl: string): Promise<void> {
   const { error } = await admin
     .from("media_jobs")
-    .update({ state: "succeeded", output_url: outputUrl, finished_at: new Date().toISOString() })
+    .update({ state: "succeeded", output_url: outputUrl, error: null, finished_at: new Date().toISOString() })
     .eq("id", job.id);
   if (error) throw new TransientJobError(`media_jobs güncellenemedi: ${error.message}`);
 

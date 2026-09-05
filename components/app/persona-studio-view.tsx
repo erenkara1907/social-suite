@@ -9,7 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import type { TurkishVoice } from "@/lib/core/providers/elevenlabs";
 import { DEFAULT_PERSONA_PROMPT_TR } from "@/lib/core/providers/persona-prompt";
-import { createPersonaAction, CREATE_PERSONA_INITIAL_STATE } from "@/app/(app)/studio/personas/actions";
+import { createPersonaAction, type CreatePersonaActionState } from "@/app/(app)/studio/personas/actions";
+
+// ⭐ adım 20.5 FAZ C1 — başlangıç state sabiti BURADA, actions.ts'te DEĞİL
+// (bkz. `app/(app)/plan/actions.ts`'in aynı gerekçesi: "use server"
+// dosyaları yalnızca async fonksiyon export edebilir).
+const CREATE_PERSONA_INITIAL_STATE: CreatePersonaActionState = { status: "idle", errorCode: null, persona: null };
 
 /**
  * `/studio/personas` — BIRLESIM_PLANI §12 adım 10 FAZ B.

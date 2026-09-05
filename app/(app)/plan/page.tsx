@@ -6,11 +6,27 @@ import { buildChains, buildMonthCells, buildWeek } from "@/lib/core/derive/calen
 import { skeletonToContentItems } from "@/lib/core/plan/calendar";
 import { brandCompletionPercent } from "@/lib/core/brand/types";
 import type { PlanHorizon } from "@/lib/core/plan/types";
+import type { PostStatus } from "@/lib/core/types";
 import { PlanView } from "@/components/app/plan-view";
 
 export const metadata = { title: "Plan" };
 
 const DEFAULT_HORIZON: PlanHorizon = 7;
+
+/**
+ * ⭐ BIRLESIM_PLANI §12 adım 20.5 FAZ C1 düzeltmesi — bulunan gerçek hata:
+ * `UgcSelectionCard` önceden `planItems`'i (aşağıdaki `plannerPort.
+ * generate()` önizlemesi — KALICILAŞMAYAN, sentetik `"skeleton-N"` id'li
+ * satırlar) besliyordu. Canlı modda bu kutulardan biri seçilip "İste"
+ * tıklanınca `requestUgcAction` → `activity.content_item_id` (gerçek uuid
+ * FK) sütununa sentetik bir string yazmaya çalışıyor ve Postgres ANINDA
+ * "invalid input syntax for type uuid" ile reddediyordu — /plan'daki UGC
+ * isteği canlı modda HİÇBİR ZAMAN çalışmamış (canlı `psql` ile doğrulandı,
+ * bu oturumda). Doğru kaynak GERÇEK, kalıcı satırlar (`contentPort.list()`,
+ * zaten aşağıda yükleniyor) — yayına henüz gitmemiş (`idea`/`draft`/
+ * `needs_review`) ve DAHA ÖNCE istenmemiş olanlar.
+ */
+const UGC_CANDIDATE_STATUSES: PostStatus[] = ["idea", "draft", "needs_review"];
 
 function parseHorizon(raw: string | undefined): PlanHorizon {
   return raw === "30" ? 30 : DEFAULT_HORIZON;
@@ -45,7 +61,7 @@ export default async function Page({
   const contentPort = port("content", overrides);
 
   const now = new Date();
-  const [skeletonResult, items, jobsSummary] = await Promise.all([
+  const [skeletonResult, items, jobsSummary, ugcRequestedIds] = await Promise.all([
     plannerPort.generate({
       theme: brand.description || brand.name,
       horizonDays,
@@ -62,6 +78,7 @@ export default async function Page({
     }),
     contentPort.list(),
     getJobsSummary(),
+    contentPort.listUgcRequested(),
   ]);
 
   // ⭐ §9.1 "sessiz düşme" değil — üretim gerçekten başarısızsa boş bir plan
@@ -75,6 +92,13 @@ export default async function Page({
   // C4 — mevcut GERÇEK içeriklerin zincirleri, referans olarak.
   const chains = buildChains(items);
 
+  // ⭐ FAZ C1 düzeltmesi — UGC isteği GERÇEK satırlar üzerinden: yayına
+  // henüz gitmemiş VE daha önce istenmemiş olanlar.
+  const requestedSet = new Set(ugcRequestedIds);
+  const ugcCandidates = items.filter(
+    (item) => UGC_CANDIDATE_STATUSES.includes(item.status) && !requestedSet.has(item.id),
+  );
+
   const completion = brandCompletionPercent(brand);
   const generateDisabled = isDemo("planner", overrides);
   // ⭐ adım 20 FAZ C1 — "UGC video iste" düğmesi video portu demo modda ise
@@ -86,6 +110,7 @@ export default async function Page({
       horizonDays={horizonDays}
       planTitle={skeleton.title}
       planItems={planItems}
+      ugcCandidates={ugcCandidates}
       week={week}
       month={month}
       chains={chains}

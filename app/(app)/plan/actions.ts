@@ -24,6 +24,16 @@ import type { PlanHorizon } from "@/lib/core/plan/types";
  * `disabled`, ama bir server action her zaman doğrudan POST edilebilir.
  * `proxy.ts`'in guard deseniyle aynı ihtiyat: UI'ya güvenme, sunucuda da
  * kontrol et.
+ *
+ * ⚠ adım 20.5 FAZ C1'de canlı Playwright ile bulundu — `settings/
+ * integrations-actions.ts`'in zaten belgelediği kural burada da geçerli:
+ * "use server" dosyaları yalnızca ASYNC FONKSİYON export edebilir. Bu iki
+ * action'ın başlangıç state sabitleri (`GENERATE_PLAN_INITIAL_STATE`,
+ * `REQUEST_UGC_INITIAL_STATE`) önceden BURADA tanımlıydı — hiçbir e2e testi
+ * bu action'ları GERÇEKTEN çağırmadığı için ("Planı üret" demoda disabled,
+ * "İste" hiç tıklanmamıştı) fark edilmemiş, ilk gerçek çağrıda "A 'use
+ * server' file can only export async functions, found object" ile
+ * çöküyordu. Sabitler artık `plan-view.tsx`'te.
  */
 
 export interface GeneratePlanActionState {
@@ -31,12 +41,6 @@ export interface GeneratePlanActionState {
   errorCode: ApiErrorCode | null;
   jobId: string | null;
 }
-
-export const GENERATE_PLAN_INITIAL_STATE: GeneratePlanActionState = {
-  status: "idle",
-  errorCode: null,
-  jobId: null,
-};
 
 function parseHorizonField(raw: FormDataEntryValue | null): PlanHorizon {
   return raw === "30" ? 30 : 7;
@@ -91,8 +95,6 @@ export interface RequestUgcActionState {
   status: "idle" | "queued" | "error";
   count: number;
 }
-
-export const REQUEST_UGC_INITIAL_STATE: RequestUgcActionState = { status: "idle", count: 0 };
 
 export async function requestUgcAction(
   _prev: RequestUgcActionState,

@@ -13,7 +13,12 @@ import {
   type PersonaRow,
 } from "@/lib/core/types";
 import { cn } from "@/lib/utils";
-import { generateUgcAction, GENERATE_UGC_INITIAL_STATE } from "@/app/(app)/studio/actions";
+import { generateUgcAction, type GenerateUgcActionState } from "@/app/(app)/studio/actions";
+
+// ⭐ adım 20.5 FAZ C1 — başlangıç state sabiti BURADA, actions.ts'te DEĞİL
+// (bkz. `app/(app)/plan/actions.ts`'in aynı gerekçesi: "use server"
+// dosyaları yalnızca async fonksiyon export edebilir).
+const GENERATE_UGC_INITIAL_STATE: GenerateUgcActionState = { status: "idle", errorCode: null, detail: null };
 
 /**
  * `/studio` — BIRLESIM_PLANI §12 adım 10 FAZ C. Ürünün en pahalı işlemi.
