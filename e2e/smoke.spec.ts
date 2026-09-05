@@ -72,5 +72,15 @@ test.describe("smoke — giriş ve altı modül", () => {
     // ── Ağ raporu ─────────────────────────────────────────────────────
     console.log(`[ağ raporu] toplam istek: yabancı köke giden 0 bekleniyor, izinli kökler: localhost, ${supabaseHost}`);
     expect(foreignRequests, `Supabase/kendi kök dışına giden istekler: ${foreignRequests.join(", ")}`).toEqual([]);
+
+    // ⭐ FAZ 0.2 (11b) — "Çıkış yap" hiçbir e2e testinde gerçekten
+    // tıklanmamıştı. Düşük risk (route handler yalnızca signOut()+redirect,
+    // veri yazmıyor) ama gerçek tıklamayla kapatılıyor: oturum GERÇEKTEN
+    // bitiyor mu (guard sonraki isteği /login'e geri çeviriyor mu).
+    await page.getByRole("button", { name: "Çıkış yap" }).click();
+    await page.waitForURL("**/login");
+    // Oturum GERÇEKTEN bitti mi — korumalı bir yola gitmek yine /login'e döner.
+    await page.goto("/dashboard");
+    await page.waitForURL("**/login**");
   });
 });

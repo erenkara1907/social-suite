@@ -69,3 +69,35 @@ GERÇEKTEN tetikleyen test:
 4. Çıkış düğmesi — düşük risk, route handler zaten basit. **Düşük öncelik.**
 
 Bu liste FAZ D'de kapatılacak.
+
+---
+
+## FAZ D — Tıklanmamış yolların kapatılması
+
+FAZ 0.2'nin dört boşluğunun HEPSİ gerçek bir tıklamayla kapatıldı:
+
+| Boşluk | Yeni test | Ne kanıtladı |
+|---|---|---|
+| `createPersonaAction` | `e2e/studio-personas.spec.ts` | "Yeni persona" formu (`sm:mode:video=live`) gerçek `personas` satırı + `media_jobs` (persona_image, queued) yazıyor. **Bulgu:** düğmenin KENDİSİ ile formun submit düğmesi AYNI etikete sahip ("Yeni persona") — hata değil ama testi ilk yazışta `getByRole` çakışmasına yol açtı (`.last()` ile çözüldü). Kod tarafında C1 sınıfı bir çökme YOK. |
+| `verifyCredentialAction` | `e2e/settings-integrations.spec.ts` (yeni test) | "Test et" düğmesi (`kie`, kasıtlı geçersiz anahtar) gerçek bir vendor auth-hatası döndürüyor, `provider_credentials.last_error` doluyor. C1 sınıfı bir çökme YOK. |
+| `generateUgcAction` | `e2e/studio-generate-preflight.spec.ts` | "Üret" düğmesi, persona görseli eksikken `videoPort.start()`'a HİÇ girmeden (sıfır `media_jobs` satırı) ön kontrolde reddediliyor — gerçek para harcayan dal kasıtlı olarak test EDİLMEDİ (görevin kendi kısıtı), ama düğmenin/action'ın kendisi artık kanıtlı. C1 sınıfı bir çökme YOK. |
+| Çıkış yap | `e2e/smoke.spec.ts` (genişletildi) | Gerçek tıklama → `/login`'e döner → `/dashboard`'a gitmeye çalışmak GERÇEKTEN tekrar `/login`'e düşer (oturum fiilen bitmiş). |
+
+**C1 sınıfından kaç tane daha bulundu: SIFIR.** Dört gerçek tıklamanın
+dördü de ilk denemede (test yazım hataları hariç — buton etiketi
+belirsizliği, `role="status"` çakışması gibi Playwright locator sorunları,
+uygulama hatası değil) beklendiği gibi çalıştı. Adım 20.5 FAZ C1'in üç
+`"use server"` dosyası gerçekten ilk tıklamada çökmüştü; bu faz aynı
+sınıftan YENİ bir örnek bulmadı — FAZ 0.1'in statik taraması (sıfır ihlal)
+ile FAZ D'nin dinamik kanıtı (sıfır çökme) birbirini doğruluyor.
+
+**"Planı üret" düğmesi bilinçli olarak dışarıda bırakıldı** — demo modda
+`disabled` (görsel olarak `plan.spec.ts` zaten kanıtlıyor), canlı modda
+tıklamak gerçek bir Anthropic çağrısı yapar (adım 14'ün kapsamı, para
+harcar) ve kuyruğa yazma mekanizması zaten `enqueue.type-check.test.ts` +
+worker testleriyle kaplı. Bu, "test edilmeyecek" için bilinçli bir
+gerekçe — envanterin son açık satırı.
+
+**Doğrulama:** `npx playwright test` — 13/13 geçti (önceki 9 + bu fazın
+4 yenisi). `npx tsc --noEmit` / `npm run lint` / `npm run test` (538 geçti)
+hepsi temiz.
