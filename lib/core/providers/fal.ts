@@ -181,3 +181,32 @@ function falErrorMessage(error: ApiError<unknown>): string {
   }
   return error.message || `fal.ai request failed (HTTP ${error.status})`;
 }
+
+/**
+ * BIRLESIM_PLANI §12 adım 20.5 FAZ B — "test et" düğmesinin fal çağrısı.
+ *
+ * Modül başlığının kendi notu geçerli: fal'in okunacak bir bakiye uç noktası
+ * yok (kie'nin `getCredits()`'inin karşılığı burada YOK). En ucuz gerçek
+ * doğrulama: var OLMAYAN bir `requestId` için kuyruk DURUMU sorgulamak —
+ * `queue.status` yalnızca OKUR, `queue.submit` gibi bir render BAŞLATMAZ.
+ * fal'in auth katmanı istek gövdesine bakmadan ÖNCE anahtarı reddeder, o
+ * yüzden sonuç şu ikisinden biri olur:
+ *   - 401/403 → anahtar GEÇERSİZ (fal isteği hiç işleme almadı)
+ *   - başka HERHANGİ bir kod (tipik olarak 404, "böyle bir istek yok") →
+ *     anahtar ÇALIŞIYOR, yalnızca sorduğumuz id hayali
+ * İkisinde de tek bir kredi harcanmaz.
+ */
+export async function verifyFalKey(apiKey: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await client(apiKey).queue.status(FAL_LIPSYNC_MODEL, { requestId: "preflight-key-check-00000000-0000" });
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      if (error.status === 401 || error.status === 403) {
+        return { ok: false, error: falErrorMessage(error) };
+      }
+      return { ok: true };
+    }
+    throw error;
+  }
+}

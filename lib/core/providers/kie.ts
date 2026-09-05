@@ -89,6 +89,20 @@ export async function getCredits(apiKey: string): Promise<number> {
   return kieRequest<number>(`${KIE_BASE}/chat/credit`, apiKey);
 }
 
+/**
+ * BIRLESIM_PLANI §12 adım 20.5 FAZ B — "test et" düğmesinin en ucuz kie
+ * çağrısı: kredi bakiyesi zaten en ucuz uç nokta (tek okuma, hiçbir render
+ * BAŞLATMAZ) — `getCredits()`'in kendisini TEKRAR yazmak yerine sarıyoruz.
+ */
+export async function verifyKieKey(apiKey: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await getCredits(apiKey);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "bilinmeyen hata" };
+  }
+}
+
 /** Uploads bytes to Kie's temp store and returns a URL its models can read. */
 export async function uploadToKie(
   data: Buffer,

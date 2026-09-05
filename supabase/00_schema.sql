@@ -411,6 +411,56 @@ end $$;
 
 revoke all on function public.get_provider_secret(uuid, text) from public, authenticated;
 
+/* ── kimlik bilgisi doğrulama — §12 adım 20.5 FAZ B ──────────────────────────
+   `/settings`'teki "test et" düğmesi. RAW anahtarı BURADA hiç TAŞIMAZ — o
+   `get_provider_secret` üzerinden `resolveProviderCredential()`'a (service-role,
+   `lib/server/credentials.ts`) ait; gerçek vendor çağrısı `lib/core/providers`
+   altındaki dosyalarda (en ucuz uç nokta, dosya başlıklarında gerekçeli). Bu
+   iki fonksiyon yalnızca ÖNCESİ (hız sınırı) ve SONRASI (sonucu yazma) —
+   ikisi de `authenticated`'a açık, `owns_brand()` ile korunan SECURITY
+   DEFINER, tıpkı `set_provider_credential` gibi. */
+
+-- Hız sınırı — düğmeye basıp durmak müşterinin faturasını şişirmesin (görev
+-- metni). `rate_limit_hit()` `authenticated`'dan REVOKE edilmiş; bu ince
+-- sarmalayıcı `enqueue_job()`'un deseninin AYNISI: owns_brand() doğrular,
+-- sonra dahili sayaç fonksiyonunu çağırır. Sağlayıcı başına DEĞİL, marka
+-- başına TEK sayaç — dört sağlayıcıyı art arda test etmeye yeter, rastgele
+-- tıklamayı sınırlar. Başlangıç değeri ⚠ KALİBRE EDİLMEDİ (§8.7'nin diğer
+-- başlangıç değerleriyle aynı sınıf).
+create or replace function public.check_credential_verify_rate_limit(p_brand_id uuid)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  if p_brand_id is null or not public.owns_brand(p_brand_id) then
+    raise exception 'check_credential_verify_rate_limit: marka sahibi değil' using errcode = '42501';
+  end if;
+  return public.rate_limit_hit('rl:credential_verify:' || p_brand_id::text, 10, 3600);
+end $$;
+
+revoke all on function public.check_credential_verify_rate_limit(uuid) from public;
+grant execute on function public.check_credential_verify_rate_limit(uuid) to authenticated;
+
+-- Doğrulama SONUCUNU yazar — RAW anahtarı hiç GÖRMEZ, yalnızca ok/hata.
+-- Başarılıysa `last_verified_at` şimdiye güncellenir ve `last_error` temizlenir;
+-- başarısızsa `last_verified_at` (varsa ÖNCEKİ başarılı doğrulama zamanı)
+-- KORUNUR, yalnızca `last_error` yazılır — "en son ne zaman ÇALIŞTIĞI
+-- doğrulandı" bilgisi bir sonraki başarısız denemeyle SİLİNMEZ.
+create or replace function public.record_provider_verification(
+  p_brand_id uuid, p_provider text, p_ok boolean, p_error text default null
+) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_brand_id is null or not public.owns_brand(p_brand_id) then
+    raise exception 'record_provider_verification: marka sahibi değil' using errcode = '42501';
+  end if;
+
+  update public.provider_credentials as pc
+     set last_verified_at = case when p_ok then now() else pc.last_verified_at end,
+         last_error       = case when p_ok then null else left(coalesce(p_error, 'bilinmeyen hata'), 500) end
+   where pc.brand_id = p_brand_id and pc.provider = p_provider;
+end $$;
+
+revoke all on function public.record_provider_verification(uuid, text, boolean, text) from public;
+grant execute on function public.record_provider_verification(uuid, text, boolean, text) to authenticated;
+
 
 -- ═════════════════════════════════════════════════════════════════════════════
 --  2. KANALLAR VE TOKEN'LAR

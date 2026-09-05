@@ -163,6 +163,23 @@ export async function getVoiceQuota(apiKey: string): Promise<VoiceQuota> {
   return { used: data.character_count ?? 0, limit: data.character_limit ?? 0 };
 }
 
+/**
+ * BIRLESIM_PLANI §12 adım 20.5 FAZ B — "test et" düğmesinin en ucuz
+ * ElevenLabs çağrısı: `/v1/user/subscription` (abonelik/kota bilgisi) zaten
+ * salt okunur ve `getVoiceQuota()`'nun kendisi bunu çağırıyor — TEKRAR
+ * YAZILMADI, sarıldı. `listTurkishVoices()` de bir alternatif olurdu ama
+ * o tek sayfa ses listesi döndürüyor (daha ağır gövde); hesap bilgisi daha
+ * ucuz ve amaca (yalnızca "anahtar çalışıyor mu") daha uygun.
+ */
+export async function verifyElevenLabsKey(apiKey: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await getVoiceQuota(apiKey);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "bilinmeyen hata" };
+  }
+}
+
 /** One page of /v2/voices, optionally narrowed to a language by the vendor. */
 async function fetchVoicePage(language: string | null, apiKey: string): Promise<RawListedVoice[]> {
   const url = new URL(`${ELEVENLABS_BASE_V2}/voices`);

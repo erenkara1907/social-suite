@@ -12,7 +12,9 @@ import { appConfig, type Integration } from "@/app.config";
 import {
   saveCredentialAction,
   deleteCredentialAction,
+  verifyCredentialAction,
   type CredentialActionState,
+  type VerifyActionState,
 } from "@/app/(app)/settings/integrations-actions";
 import type { CredentialStatus } from "@/app/(app)/settings/integrations-data";
 
@@ -31,9 +33,16 @@ import type { CredentialStatus } from "@/app/(app)/settings/integrations-data";
  * gerçek çağrısıyla dolacak.
  */
 
-const CREDENTIAL_INITIAL_STATE: CredentialActionState = { errorKey: null, provider: null, savedAt: null };
+const CREDENTIAL_INITIAL_STATE: CredentialActionState = { errorKey: null, provider: null, savedAt: null, formatWarning: false };
+const VERIFY_INITIAL_STATE: VerifyActionState = { provider: null, status: "idle", detail: null, verifiedAt: null };
 
 const MANAGED_INTEGRATIONS = appConfig.integrations.filter((i) => i.managedViaVault);
+
+/** ⭐ adım 20.5 FAZ B — "test et" yalnızca `ugc_pipeline` + `plan_generate`/
+ *  `caption_write`'ın gerçekten çağırdığı dört sağlayıcı için var (görev
+ *  metni: "dört sağlayıcı için test düğmesi"). `voyage` (embedding, adım 15)
+ *  dışarıda bırakıldı — bu oturumun kapsamı yalnızca bu dördü. */
+const VERIFIABLE_PROVIDERS = new Set(["anthropic", "kie", "elevenlabs", "fal"]);
 
 export function SettingsIntegrationsForm({ statuses }: { statuses: CredentialStatus[] }) {
   const { ui } = useLang();
@@ -69,14 +78,20 @@ function IntegrationRow({
   const router = useRouter();
   const [saveState, saveAction, savePending] = useActionState(saveCredentialAction, CREDENTIAL_INITIAL_STATE);
   const [deleteState, deleteAction, deletePending] = useActionState(deleteCredentialAction, CREDENTIAL_INITIAL_STATE);
+  const [verifyState, verifyAction, verifyPending] = useActionState(verifyCredentialAction, VERIFY_INITIAL_STATE);
 
   const isConfigured = !!status;
+  const canVerify = isConfigured && VERIFIABLE_PROVIDERS.has(integration.key);
+  // ⭐ FAZ B — hata her zaman en son durumu yansıtır (bir sonraki başarılı
+  // testte record_provider_verification last_error'ı temizler); bu satırın
+  // KENDİ verify çağrısı henüz dönmemişse status.lastError'a güvenilir.
+  const hasVerifyError = !!status?.lastError;
 
-  // Kaydetme/silme başarılıysa sunucu bileşenini tazele — masked_hint'in
-  // yeni değeri (ya da satırın kaybolması) buradan gelir.
+  // Kaydetme/silme/doğrulama başarılıysa sunucu bileşenini tazele —
+  // masked_hint/last_verified_at/last_error'ın yeni değeri buradan gelir.
   useEffect(() => {
-    if (saveState.savedAt || deleteState.savedAt) router.refresh();
-  }, [saveState.savedAt, deleteState.savedAt, router]);
+    if (saveState.savedAt || deleteState.savedAt || verifyState.verifiedAt) router.refresh();
+  }, [saveState.savedAt, deleteState.savedAt, verifyState.verifiedAt, router]);
 
   return (
     <div className="rounded-lg border border-border p-4 space-y-3" data-testid={`integration-row-${integration.key}`}>
@@ -84,9 +99,14 @@ function IntegrationRow({
         <div className="flex items-center gap-2">
           <span className="font-medium text-foreground">{integration.name}</span>
           {integration.required && <Badge tone="warning">{ui.integrationRequiredBadge}</Badge>}
-          <Badge tone={isConfigured ? "success" : "neutral"}>
-            {isConfigured ? ui.integrationConfigured : ui.integrationMissing}
-          </Badge>
+          {!isConfigured && <Badge tone="neutral">{ui.integrationMissing}</Badge>}
+          {isConfigured && hasVerifyError && <Badge tone="destructive">{ui.integrationVerifyErrorBadge}</Badge>}
+          {isConfigured && !hasVerifyError && status?.lastVerifiedAt && (
+            <Badge tone="success">{ui.integrationVerifiedBadge}</Badge>
+          )}
+          {isConfigured && !hasVerifyError && !status?.lastVerifiedAt && (
+            <Badge tone="neutral">{ui.integrationConfigured}</Badge>
+          )}
         </div>
         <a
           href={integration.docsUrl}
@@ -133,6 +153,15 @@ function IntegrationRow({
             {deletePending ? ui.integrationDeleting : ui.integrationDelete}
           </Button>
         )}
+        {/* ⭐ adım 20.5 FAZ B — aynı form, farklı formAction (delete butonuyla
+         *  aynı desen): apiKey alanı boş gönderilse de sorun değil, verifyCredentialAction
+         *  yalnızca `provider`'ı okur — anahtarın KENDİSİ zaten kayıtlı olan. */}
+        {canVerify && (
+          <Button type="submit" formAction={verifyAction} variant="outline" size="sm" disabled={verifyPending} className="gap-1.5">
+            {verifyPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {verifyPending ? ui.integrationVerifying : ui.integrationVerifyCta}
+          </Button>
+        )}
       </form>
 
       {saveState.provider === integration.key && saveState.errorKey && (
@@ -145,9 +174,24 @@ function IntegrationRow({
           {ui.integrationSavedAt}
         </p>
       )}
+      {saveState.provider === integration.key && saveState.savedAt && saveState.formatWarning && (
+        <p role="alert" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+          {ui.integrationFormatWarning}
+        </p>
+      )}
       {deleteState.provider === integration.key && deleteState.errorKey && (
         <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {ui[deleteState.errorKey]}
+        </p>
+      )}
+      {verifyState.provider === integration.key && verifyState.status === "error" && (
+        <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {verifyState.detail}
+        </p>
+      )}
+      {verifyState.provider === integration.key && verifyState.status === "ok" && (
+        <p role="status" className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">
+          {ui.integrationVerifySuccessMsg}
         </p>
       )}
     </div>
