@@ -12,8 +12,18 @@ import { PLATFORM_META, PLATFORMS, type ChannelAccount, type Platform } from "@/
 import { CREDENTIAL_CONNECT_PLATFORMS, PUBLISHABLE_PLATFORMS } from "@/lib/core/publishing";
 import {
   connectChannelAction, disconnectChannelAction,
-  CONNECT_CHANNEL_INITIAL_STATE, DISCONNECT_CHANNEL_INITIAL_STATE,
+  type ConnectChannelActionState, type DisconnectChannelActionState,
 } from "@/app/(app)/channels/actions";
+
+// ⭐ adım 20.5 FAZ C1 dersi — başlangıç state sabitleri BURADA,
+// actions.ts'te DEĞİL ("use server" dosyaları yalnızca async fonksiyon
+// export edebilir; library-view.tsx'in DELETE_INITIAL_STATE deseni).
+const CONNECT_CHANNEL_INITIAL_STATE: ConnectChannelActionState = {
+  status: "idle", platform: null, errorCode: null,
+};
+const DISCONNECT_CHANNEL_INITIAL_STATE: DisconnectChannelActionState = {
+  status: "idle", channelId: null,
+};
 
 export interface ChannelCardView {
   platform: Platform;

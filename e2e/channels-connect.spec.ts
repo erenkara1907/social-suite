@@ -52,6 +52,11 @@ test.describe("channels — Bluesky gerçek bağlanma (17a FAZ A)", () => {
     await page.locator('button[type="submit"]').click();
     await page.waitForURL("**/dashboard");
 
+    // ⭐ `channel` portunu canlıya çek — dev-only çerez (mode.ts), diğer e2e
+    // testlerinin (plan-studio-bridge.spec.ts) izlediği aynı desen. Bu
+    // olmadan `/channels` demo modda kalır ve form hiç render edilmez.
+    await page.context().addCookies([{ name: "sm:mode:channel", value: "live", url: page.url() }]);
+
     await page.goto("/channels");
     const card = page.getByTestId("channel-card-bluesky");
     await expect(card).toBeVisible();

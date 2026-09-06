@@ -10,8 +10,11 @@ import type { Platform } from "@/lib/core/types";
  * `/channels`'ın "Bağla"/"Bağlantıyı kes" düğmeleri — §12 adım 17a FAZ A.
  *
  * ⚠ "use server" dosyaları yalnızca ASYNC FONKSİYON export edebilir
- * (adım 20.5 FAZ C1) — başlangıç state sabitleri burada, `ChannelsView`
- * bunları `useActionState`'e ilk değer olarak geçiyor.
+ * (adım 20.5 FAZ C1) — başlangıç state sabitleri BURADA DEĞİL,
+ * `channels-view.tsx`'te (`library-view.tsx`'in `DELETE_INITIAL_STATE`
+ * deseni). İlk yazımda bu sabitler buraya konmuştu, Next.js build'i
+ * "A 'use server' file can only export async functions, found object"
+ * hatasıyla reddetti — canlı olarak yakalanan gerçek bir hata (17a FAZ A2).
  *
  * Token bu dosyadan HİÇBİR ZAMAN geçmez — form yalnızca identifier/
  * appPassword'ü `ChannelPort.connectWithCredentials`'a iletir, dönen
@@ -22,12 +25,6 @@ export interface ConnectChannelActionState {
   platform: Platform | null;
   errorCode: ApiErrorCode | null;
 }
-
-export const CONNECT_CHANNEL_INITIAL_STATE: ConnectChannelActionState = {
-  status: "idle",
-  platform: null,
-  errorCode: null,
-};
 
 export async function connectChannelAction(
   _prev: ConnectChannelActionState,
@@ -50,11 +47,6 @@ export interface DisconnectChannelActionState {
   status: "idle" | "disconnected" | "error";
   channelId: string | null;
 }
-
-export const DISCONNECT_CHANNEL_INITIAL_STATE: DisconnectChannelActionState = {
-  status: "idle",
-  channelId: null,
-};
 
 export async function disconnectChannelAction(
   _prev: DisconnectChannelActionState,

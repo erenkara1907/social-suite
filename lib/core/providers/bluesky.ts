@@ -80,6 +80,40 @@ export async function verifyBlueskySession(session: BlueskySession): Promise<Blu
 }
 
 /**
+ * `refreshJwt` ile yeni bir `accessJwt`/`refreshJwt` çifti alır
+ * (`com.atproto.server.refreshSession`) — FAZ B3'ün "token süresi
+ * dolmuşsa yenile" adımı bunu kullanır.
+ *
+ * ⚠ ÖNEMLİ BULGU (canlı test, 17a FAZ A2.1) — `accessJwt`'in kendisi
+ * `fetchHandler` tarafından otomatik yenilenir (401/ExpiredToken alınca,
+ * `node_modules/@atproto/api/dist/atp-agent.js`), bu fonksiyon YALNIZCA
+ * `refreshJwt`'in KENDİSİ süresi dolduğunda veya oturum `deleteSession`
+ * ile iptal edildiğinde manuel olarak çağrılmalı — o durumda sunucu bu
+ * çağrıyı da reddeder (bkz. `revokeBlueskySession` sonrası bu fonksiyonun
+ * `ok:false` dönmesi, canlı doğrulandı).
+ */
+export async function refreshBlueskySession(session: BlueskySession): Promise<BlueskyResult> {
+  const credentialSession = new CredentialSession(new URL(BLUESKY_SERVICE_URL));
+  credentialSession.session = { ...session, active: true };
+  try {
+    await credentialSession.refreshSession();
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+  const refreshed = credentialSession.session;
+  if (!refreshed) return { ok: false, error: "yenilenmiş oturum boş döndü" };
+  return {
+    ok: true,
+    session: {
+      did: refreshed.did,
+      handle: refreshed.handle,
+      accessJwt: refreshed.accessJwt,
+      refreshJwt: refreshed.refreshJwt,
+    },
+  };
+}
+
+/**
  * Sunucudaki oturumu iptal eder (`com.atproto.server.deleteSession`) —
  * disconnect akışında `channel_credentials` satırı silinmeden ÖNCE
  * çağrılır, böylece token yalnızca bizim tarafımızda değil, Bluesky

@@ -157,23 +157,97 @@ bugün yalnızca `bluesky` içeriyor.
   hâlâ geçiyor (özellikle `smoke.spec.ts`: `/channels` yeni formla birlikte
   hâlâ hiçbir yabancı köke ağ isteği atmıyor, ScreenStub göstermiyor).
 
-**⚠ EKSİK — gerçek hesap kanıtı bekliyor:** FAZ A'nın kendi doğrulama
-kriteri ("gerçek bir hesap gerçekten bağlanıyor... kullanıcı oturumuyla
-sorgu → 0 satır, service-role → 1 satır; disconnect token'ı siliyor") için
-iki gated test yazıldı ama HENÜZ ÇALIŞTIRILAMADI — gerçek bir Bluesky test
-hesabı + o hesap için oluşturulmuş bir uygulama şifresi gerekiyor, bu
-oturumda mevcut değildi:
+## FAZ A2 — Canlı kanıt (tamamlandı)
 
-1. `lib/core/providers/bluesky.live.test.ts` —
-   `RUN_BLUESKY_LIVE_TEST=1 BLUESKY_TEST_IDENTIFIER=... BLUESKY_TEST_APP_PASSWORD=... npx vitest run lib/core/providers/bluesky.live.test.ts`
-2. `e2e/channels-connect.spec.ts` —
-   `BLUESKY_TEST_IDENTIFIER=... BLUESKY_TEST_APP_PASSWORD=... npm run test:e2e -- channels-connect`
-   (SQL kanıtlarının ÜÇÜ de bu dosyada: token dolu, RLS altında 0 satır,
-   disconnect sonrası silinmiş.)
+Gerçek bir Bluesky test hesabıyla iki gated test çalıştırıldı. Kimlik
+bilgileri yalnızca `.env.local`'da (kullanıcı tarafından girildi, bu
+oturumda hiçbir zaman okunup ekrana/log'a yazılmadı, commit edilmedi).
 
-Gerçek kimlik bilgisi sağlandığında bu iki komut çalıştırılıp çıktısı bu
-rapora eklenecek — FAZ A o ana kadar "kod tamam, canlı kanıt bekliyor"
-durumunda.
+**1. `lib/core/providers/bluesky.live.test.ts` — 5/5 geçti:**
+
+```
+✓ GERÇEK kimlik bilgisiyle oturum açar (ok:true, did/handle/accessJwt dolu)
+✓ GEÇERSİZ uygulama şifresiyle net bir hatayla ok:false döner
+    → gerçek sunucu yanıtı: "Invalid identifier or password"
+✓ verifyBlueskySession — saklanmış (taze) bir oturumu en ucuz uç noktayla doğrular
+✓ revokeBlueskySession — oturumu sunucu tarafında iptal eder
+    → revoke sonrası refreshSession gerçek sunucu yanıtı: "Token has been revoked"
+✓ A2.1 — accessJwt/refreshJwt ömrü (exp - iat, saniye)
+```
+
+**⚠ CANLI BULGU — `deleteSession` accessJwt'i ANINDA öldürmüyor.** AT
+Protocol JWT'leri durum sorgusu olmadan kriptografik doğrulanıyor (kara
+liste yok) — `deleteSession` yalnızca `refreshJwt`'i öldürüyor, o anda
+geçerli olan `accessJwt` kendi doğal ömrü dolana kadar çalışmaya devam
+ediyor. Bu yüzden disconnect'in gerçek garantisi iki katmanlı: (a)
+`channel_credentials` satırının silinmesi — uygulamamız token'ı bir daha
+asla kullanmaz, (b) sunucu tarafı `refreshJwt` iptali — token bir şekilde
+sızsa bile 2 saat sonra yenilenemez. `revokeBlueskySession` bu ikinciyi
+sağlıyor, `disconnect()`'in DB silmesi birinciyi.
+
+**2. `e2e/channels-connect.spec.ts` — 1/1 geçti** (ve tam Playwright takımı
+14/14, regresyon yok):
+
+```
+✓ gerçek hesap bağlanır → token RLS arkasında → disconnect token'ı siler (17.5s)
+```
+
+Kanıtlanan dört madde, testin kendi SQL sorgularıyla:
+- Gerçek hesap gerçekten bağlandı — `/channels` formu, gerçek tıklama,
+  "Bağlı" rozeti gerçekten değişti.
+- `channel_credentials`'ta `access_token`/`refresh_token` dolu (uzunluk
+  > 0) — düz metin ama BEKLENEN düz metin: şifreleme değil, RLS + zero
+  politika + yalnızca service-role erişimi bu tabloyu koruyor (§12 adım 5
+  kararı, ADIM_012).
+- **Kullanıcı oturumuyla (anon key + gerçek JWT) sorgu → 0 satır**;
+  service-role → 1 satır. RLS'in gerçekten devrede olduğunun kanıtı.
+- Disconnect → `channel_credentials` satırı SİLİNDİ (`maybeSingle()` →
+  `null`), `channels.is_connected` → `false`.
+
+DB test sonrası temiz (kalıntı yok — `channels`/`channel_credentials`
+count'ları sıfıra döndü, doğrulandı).
+
+⚠ Bu FAZ'ı tamamlarken bir gerçek build hatası bulundu ve düzeltildi:
+`app/(app)/channels/actions.ts`, "use server" dosyası olduğu hâlde ilk
+yazımda iki sabit (`CONNECT_CHANNEL_INITIAL_STATE`/
+`DISCONNECT_CHANNEL_INITIAL_STATE`) export ediyordu — Next.js bunu "A
+'use server' file can only export async functions, found object" ile
+reddetti. Sabitler `components/app/channels-view.tsx`'e taşındı
+(`library-view.tsx`'in `DELETE_INITIAL_STATE` deseni) — bu dosyanın
+kendi baştaki yorumu bu kuralı zaten anlatıyordu, ilk yazım onu ihlal
+etmişti.
+
+### A2.1 — `refreshJwt`/`accessJwt` ömrü (FAZ 0'ın açık maddesi ÇÖZÜLDÜ)
+
+JWT'lerin `exp`/`iat` alanları (imza doğrulanmadan, yalnızca süre
+hesaplamak için) çözülerek ölçüldü:
+
+| Token | Ömür |
+|---|---|
+| `accessJwt` | **7200 saniye = 2 saat** |
+| `refreshJwt` | **7.776.000 saniye = 90 gün** |
+
+**FAZ B'ye etkisi:** `@atproto/api`'nin `fetchHandler`'ı `accessJwt`'i
+401/`ExpiredToken` aldığında OTOMATİK yeniliyor (`refreshJwt`'i kullanarak,
+doğrulandı: `node_modules/@atproto/api/dist/atp-agent.js`) — yani FAZ B'nin
+`publish` handler'ının 2 saatlik pencereyi elle takip etmesine GEREK YOK,
+`Agent`/`CredentialSession` bunu kendisi hallediyor. Manuel
+`refreshBlueskySession()` yalnızca `refreshJwt`'in KENDİSİ (90 gün) süresi
+dolduğunda ya da oturum `deleteSession` ile iptal edildiğinde devreye
+girer — bu durumda kanal "bağlantı koptu" sayılıp kullanıcının yeniden
+bağlanması istenmeli (B3'ün kararı).
+
+**16/17b'ye (Instagram) dry-run değeri:** Instagram'ın 60 günlük
+`access_token` yenilemesi kavramsal olarak AYNI problem — "uzun ömürlü bir
+token, süresi dolmadan yenilenmeli, yenileme başarısız olursa kanal
+bağlantısı koptu sayılmalı". Bluesky'nin 90 günlük `refreshJwt`'i +
+otomatik `accessJwt` yenilemesi, bu mantığın YARISINI (kısa-ömürlü
+otomatik yenileme) zaten kanıtladı; kalan yarısı (uzun-ömürlü token'ın
+KENDİSİNİN süresi dolmadan proaktif yenilenmesi — Instagram'da 60 gün,
+Bluesky'de bu oturumda gözlemlenmedi çünkü hiç 90 gün beklenmedi) 17b'de
+ayrıca ele alınacak.
+
+**Commit:** `kanal bağlama canlı kanıtı (17a-a2)`.
 
 ## FAZ B–E ve SON RAPOR
 
