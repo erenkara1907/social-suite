@@ -119,8 +119,62 @@ her tabloda tek kısıt var (yineleme yok).
 
 ---
 
-## FAZ A–E ve SON RAPOR
+## FAZ A — Kanal bağlama
 
-Bu bölümler henüz tamamlanmadı — 17a'nın kalan fazları (kanal bağlama,
-yayın hattı, cron aktivasyonu, `/queue` gerçek yayın, kapanış) ayrı
-oturumlarda işlenecek ve bu rapor her fazın sonunda güncellenecek.
+`ChannelPort`'a OAuth'suz platformlar için ikinci bir bağlanma modu
+eklendi: `connectWithCredentials(platform, {identifier, appPassword})` —
+`startConnect`/`ConnectHandoff` (yönlendirmeli) yanında, doğrudan kimlik
+bilgisiyle. `CREDENTIAL_CONNECT_PLATFORMS` (`lib/core/publishing.ts`)
+bugün yalnızca `bluesky` içeriyor.
+
+**Yapılanlar:**
+
+- `lib/core/providers/bluesky.ts` — `connectBluesky` (createSession),
+  `verifyBlueskySession` (getSession, en ucuz uç nokta — adım 20.5 deseni),
+  `revokeBlueskySession` (deleteSession, disconnect'te sunucu tarafı iptal).
+  `@atproto/api@0.20.42` (resmi SDK, npm'den doğrulandı) kullanıyor.
+- `lib/adapters/live/channel.ts` — `connectWithCredentials`: giriş →
+  doğrulama → `channels` upsert → `channel_credentials` yazımı (yalnızca
+  service-role, `lib/supabase/admin.ts`'in "üç yer" kuralına ikinci bir
+  meşru çağıran olarak eklendi). `disconnect`: sahiplik kontrolü → sunucu
+  tarafı iptal (en iyi çaba) → `channel_credentials` SİLİNİR → `channels.
+  is_connected=false`.
+- `lib/adapters/demo/channel.ts` — `connectWithCredentials` sıfır ağ
+  isteğiyle "bağlandı" döner (demo'nun "sıfır dış istek" kuralı).
+- `components/app/channels-view.tsx` — Bluesky kartı artık gerçek bir form
+  (identifier + uygulama şifresi), `AI_ERROR_COPY` ile TR/EN hata metni;
+  bağlıyken gerçek bir "Bağlantıyı kes" düğmesi.
+- `app/(app)/channels/actions.ts` — `connectChannelAction`/
+  `disconnectChannelAction` server action'ları; token bu katmandan
+  ASLA istemciye dönmez.
+
+**Doğrulama:**
+
+- `npx tsc --noEmit`, `npx eslint .` (1 önceden var olan ilgisiz uyarı),
+  `npx vitest run` (538 geçti/0 kırık, +4 gated bluesky testi skip), `npm
+  run build` — hepsi temiz.
+- `npx playwright test --project=chromium` — mevcut 13 e2e testinin HEPSİ
+  hâlâ geçiyor (özellikle `smoke.spec.ts`: `/channels` yeni formla birlikte
+  hâlâ hiçbir yabancı köke ağ isteği atmıyor, ScreenStub göstermiyor).
+
+**⚠ EKSİK — gerçek hesap kanıtı bekliyor:** FAZ A'nın kendi doğrulama
+kriteri ("gerçek bir hesap gerçekten bağlanıyor... kullanıcı oturumuyla
+sorgu → 0 satır, service-role → 1 satır; disconnect token'ı siliyor") için
+iki gated test yazıldı ama HENÜZ ÇALIŞTIRILAMADI — gerçek bir Bluesky test
+hesabı + o hesap için oluşturulmuş bir uygulama şifresi gerekiyor, bu
+oturumda mevcut değildi:
+
+1. `lib/core/providers/bluesky.live.test.ts` —
+   `RUN_BLUESKY_LIVE_TEST=1 BLUESKY_TEST_IDENTIFIER=... BLUESKY_TEST_APP_PASSWORD=... npx vitest run lib/core/providers/bluesky.live.test.ts`
+2. `e2e/channels-connect.spec.ts` —
+   `BLUESKY_TEST_IDENTIFIER=... BLUESKY_TEST_APP_PASSWORD=... npm run test:e2e -- channels-connect`
+   (SQL kanıtlarının ÜÇÜ de bu dosyada: token dolu, RLS altında 0 satır,
+   disconnect sonrası silinmiş.)
+
+Gerçek kimlik bilgisi sağlandığında bu iki komut çalıştırılıp çıktısı bu
+rapora eklenecek — FAZ A o ana kadar "kod tamam, canlı kanıt bekliyor"
+durumunda.
+
+## FAZ B–E ve SON RAPOR
+
+Henüz başlanmadı.

@@ -26,6 +26,27 @@ export const demoChannel: ChannelPort = {
       },
     };
   },
+  // ⭐ 17a FAZ A — hiçbir ağ çağrısı YOK (demo'nun "sıfır dış istek" kuralı).
+  // Girilen kimlik bilgisi hiç okunmaz/doğrulanmaz; her çağrı "bağlandı"
+  // döner, tıpkı `startConnect`'in sahte OAuth'u gibi.
+  async connectWithCredentials(platform) {
+    const existing = DEMO_CHANNELS.find((c) => c.platform === platform);
+    return {
+      ok: true,
+      data: existing
+        ? { ...existing, is_connected: true }
+        : {
+            id: `demo-${platform}-connected`,
+            platform,
+            handle: `@demo.${platform}`,
+            followers: 0,
+            growth: 0,
+            engagement: 0,
+            is_connected: true,
+            last_synced_at: null,
+          },
+    };
+  },
   async disconnect() {
     return { ok: true, data: undefined };
   },

@@ -13,7 +13,11 @@ import { SUPABASE_URL } from "./config";
  *
  * BIRLESIM_PLANI §5 — yalnızca üç yerde kullanılır:
  *   1. cron job rotaları        (§12 adım 12/17/18)
- *   2. OAuth callback'i         (§12 adım 16 — channel_credentials yazımı)
+ *   2. kanal bağlama akışı      (OAuth callback'i, §12 adım 16 VEYA
+ *                                 doğrudan kimlik bilgisi girişi, §12 adım
+ *                                 17a FAZ A — ikisi de channel_credentials
+ *                                 yazar/siler, bkz. `lib/adapters/live/
+ *                                 channel.ts`)
  *   3. provider_credentials okuması (§12 adım 13 — Vault)
  *
  * Bu üçü dışında bir çağrı görürsen o bir hatadır: KESIF_THREADLY §11,

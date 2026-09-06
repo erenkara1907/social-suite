@@ -76,6 +76,8 @@ describe("⭐ 12 portun demo implementasyonu ÇAĞRILABİLİYOR", () => {
     await expect(port("publisher").publish("10000000-0000-4000-8000-000000000010")).resolves.toMatchObject({ ok: true });
     await expect(port("metrics").latest(60)).resolves.toBeInstanceOf(Array);
     await expect(port("channel").startConnect("instagram")).resolves.toMatchObject({ ok: true });
+    await expect(port("channel").connectWithCredentials("bluesky", { identifier: "x", appPassword: "y" }))
+      .resolves.toMatchObject({ ok: true });
     await expect(port("channel").disconnect("c1")).resolves.toMatchObject({ ok: true });
     await expect(port("brand").save({
       name: "n", industry: "", description: "", products: "",

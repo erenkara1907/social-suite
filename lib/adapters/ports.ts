@@ -305,12 +305,28 @@ export interface MetricsPort {
  *
  * ⚠ Token bu arayüzden GEÇMEZ. `channel_credentials` RLS açık + sıfır
  * politika; yalnızca service-role okur. `startConnect` bir yönlendirme URL'i
- * döndürür, kimlik bilgisi değil.
+ * döndürür, kimlik bilgisi değil; `connectWithCredentials` girdi olarak bir
+ * kimlik bilgisi ALIR ama dönüşte YALNIZCA `ChannelRow` verir — token
+ * çağırana asla geri sızmaz, doğrudan `channel_credentials`'a yazılır.
+ *
+ * ⭐ 17a FAZ A — iki bağlanma modu var, çünkü Bluesky'nin OAuth'u YOK:
+ * `startConnect`/`ConnectHandoff` yönlendirmeli (Instagram, adım 16/17b);
+ * `connectWithCredentials` doğrudan girilen kimlik bilgisiyle (Bluesky,
+ * bugün). Hangi platformun hangi modu kullandığı `lib/core/publishing.ts`
+ * → `CREDENTIAL_CONNECT_PLATFORMS`'ta.
  */
 export interface ChannelPort {
   list(): Promise<ChannelRow[]>;
   startConnect(platform: Platform): Promise<ApiResult<ConnectHandoff>>;
+  connectWithCredentials(platform: Platform, credentials: ChannelCredentialsInput): Promise<ApiResult<ChannelRow>>;
   disconnect(channelId: string): Promise<ApiResult<void>>;
+}
+
+export interface ChannelCredentialsInput {
+  /** Bluesky: handle veya e-posta. */
+  identifier: string;
+  /** Bluesky: uygulama şifresi (hesap şifresi DEĞİL). */
+  appPassword: string;
 }
 
 export interface ConnectHandoff {

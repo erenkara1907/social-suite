@@ -278,6 +278,15 @@ export const ui = {
     channelsLastSynced: "Son yenileme",
     channelsNeverSynced: "Hiç yenilenmedi",
     channelsConnectCta: "Bağla",
+    // ── 17a FAZ A: kimlik bilgisiyle bağlanma (bugün yalnızca bluesky) ───
+    channelsIdentifierLabel: "Kullanıcı adı veya e-posta",
+    channelsIdentifierPlaceholder: "kullanici.bsky.social",
+    channelsAppPasswordLabel: "Uygulama şifresi",
+    channelsAppPasswordHint: "Hesap şifreniz DEĞİL — Bluesky ayarlarından oluşturulan tek kullanımlık uygulama şifresi.",
+    channelsConnectSubmit: "Bağla",
+    channelsConnecting: "Bağlanıyor…",
+    channelsDisconnectCta: "Bağlantıyı kes",
+    channelsDisconnecting: "Kesiliyor…",
     // ── 11b FAZ B: /library ─────────────────────────────────────────────
     libraryTitle: "Kütüphane",
     libraryHint: "Üretilen ve yüklenen tüm medya — yalnızca bu markaya ait.",
@@ -573,6 +582,15 @@ export const ui = {
     channelsLastSynced: "Last synced",
     channelsNeverSynced: "Never synced",
     channelsConnectCta: "Connect",
+    // ── 17a FAZ A: credential-based connect (today: bluesky only) ────────
+    channelsIdentifierLabel: "Username or email",
+    channelsIdentifierPlaceholder: "username.bsky.social",
+    channelsAppPasswordLabel: "App password",
+    channelsAppPasswordHint: "Not your account password — a single-use app password created in Bluesky settings.",
+    channelsConnectSubmit: "Connect",
+    channelsConnecting: "Connecting…",
+    channelsDisconnectCta: "Disconnect",
+    channelsDisconnecting: "Disconnecting…",
     // ── 11b FAZ B: /library ─────────────────────────────────────────────
     libraryTitle: "Library",
     libraryHint: "Every generated and uploaded media file — this brand's only.",

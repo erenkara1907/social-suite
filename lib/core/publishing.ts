@@ -26,5 +26,17 @@ export function canPublish(platform: Platform): boolean {
   return PUBLISHABLE_PLATFORMS.includes(platform);
 }
 
+/**
+ * ⭐ 17a FAZ A — hangi platformlar OAuth'suz, doğrudan girilen bir kimlik
+ * bilgisiyle (`ChannelPort.connectWithCredentials`) bağlanır. Bugün
+ * `PUBLISHABLE_PLATFORMS`'la AYNI tek üyeye sahip (yalnızca bluesky) ama
+ * kavramsal olarak FARKLI bir soruya cevap veriyor: biri "bugün gerçekten
+ * yayınlanabilir mi", diğeri "bağlanması OAuth yönlendirmesi mi gerektiriyor,
+ * yoksa bir form mu yeterli". Instagram (17b) OAuth gerektirdiği için bu
+ * listeye asla girmeyecek; ileride publishable ama OAuth'lu bir platform
+ * (örn. LinkedIn, §8.8) eklendiğinde iki liste ayrışacak.
+ */
+export const CREDENTIAL_CONNECT_PLATFORMS: Platform[] = ["bluesky"];
+
 /** Statuses that mean "this is expected to go out on its own". */
 export const AUTOMATED_STATUSES = ["scheduled", "published"] as const;

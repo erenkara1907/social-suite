@@ -1,12 +1,19 @@
 "use client";
 
+import { useActionState } from "react";
 import { useLang } from "@/components/i18n/language-provider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Input, Label } from "@/components/ui/input";
+import { AI_ERROR_COPY } from "@/lib/core/ai/error-copy";
 import { PLATFORM_META, PLATFORMS, type ChannelAccount, type Platform } from "@/lib/core/types";
-import { PUBLISHABLE_PLATFORMS } from "@/lib/core/publishing";
+import { CREDENTIAL_CONNECT_PLATFORMS, PUBLISHABLE_PLATFORMS } from "@/lib/core/publishing";
+import {
+  connectChannelAction, disconnectChannelAction,
+  CONNECT_CHANNEL_INITIAL_STATE, DISCONNECT_CHANNEL_INITIAL_STATE,
+} from "@/app/(app)/channels/actions";
 
 export interface ChannelCardView {
   platform: Platform;
@@ -32,10 +39,11 @@ function requirementText(platform: Platform, isPublishable: boolean): { tr: stri
     };
   }
   if (isPublishable) {
-    // Bugün yalnızca bluesky — bağlama akışı §12 adım 17a FAZ A'nın işi.
+    // Bugün yalnızca bluesky, ve artık gerçek bir form var — bu metin
+    // yalnızca fallback (form render edilemezse) olarak kalıyor.
     return {
-      tr: "Uygulama şifresiyle bağlanır, onay/inceleme gerekmez. Bağlama akışı hazırlanıyor.",
-      en: "Connects with an app password, no approval/review needed. Connect flow is being wired up.",
+      tr: "Uygulama şifresiyle bağlanır, onay/inceleme gerekmez.",
+      en: "Connects with an app password, no approval/review needed.",
     };
   }
   return {
@@ -44,14 +52,79 @@ function requirementText(platform: Platform, isPublishable: boolean): { tr: stri
   };
 }
 
+/** ⭐ 17a FAZ A — Bluesky gibi OAuth'suz platformlar için gerçek bağlanma
+ *  formu. Token hiçbir zaman istemciye dönmez; `connectChannelAction`
+ *  yalnızca `ChannelRow` alır/döner. */
+function ConnectCredentialsForm({ platform }: { platform: Platform }) {
+  const { ui, lang } = useLang();
+  const [state, formAction, pending] = useActionState(connectChannelAction, CONNECT_CHANNEL_INITIAL_STATE);
+  const failed = state.status === "error" && state.platform === platform;
+
+  return (
+    <form action={formAction} className="space-y-2.5">
+      <input type="hidden" name="platform" value={platform} />
+      <div className="space-y-1">
+        <Label htmlFor={`identifier-${platform}`}>{ui.channelsIdentifierLabel}</Label>
+        <Input
+          id={`identifier-${platform}`}
+          name="identifier"
+          required
+          autoComplete="off"
+          placeholder={ui.channelsIdentifierPlaceholder}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor={`app-password-${platform}`}>{ui.channelsAppPasswordLabel}</Label>
+        <Input
+          id={`app-password-${platform}`}
+          name="appPassword"
+          type="password"
+          required
+          autoComplete="off"
+          placeholder="xxxx-xxxx-xxxx-xxxx"
+        />
+        <p className="text-xs text-muted-foreground">{ui.channelsAppPasswordHint}</p>
+      </div>
+      {failed && (
+        <p className="text-xs text-destructive" role="alert">
+          {state.errorCode ? AI_ERROR_COPY[state.errorCode][lang] : ""}
+        </p>
+      )}
+      <Button type="submit" variant="outline" size="sm" disabled={pending} className="w-full gap-1.5">
+        <Icon name="link-2" className="h-3.5 w-3.5" />
+        {pending ? ui.channelsConnecting : ui.channelsConnectSubmit}
+      </Button>
+    </form>
+  );
+}
+
+function DisconnectButton({ channelId }: { channelId: string }) {
+  const { ui } = useLang();
+  const [state, formAction, pending] = useActionState(disconnectChannelAction, DISCONNECT_CHANNEL_INITIAL_STATE);
+  const disconnected = state.status === "disconnected" && state.channelId === channelId;
+
+  if (disconnected) return null;
+
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="channelId" value={channelId} />
+      <Button type="submit" variant="ghost" size="sm" disabled={pending} className="w-full gap-1.5 text-destructive">
+        <Icon name="unlink" className="h-3.5 w-3.5" />
+        {pending ? ui.channelsDisconnecting : ui.channelsDisconnectCta}
+      </Button>
+    </form>
+  );
+}
+
 function ChannelCard({ card }: { card: ChannelCardView }) {
   const { ui, lang } = useLang();
   const meta = PLATFORM_META[card.platform];
   const isPublishable = (PUBLISHABLE_PLATFORMS as readonly Platform[]).includes(card.platform);
+  const isCredentialConnect = (CREDENTIAL_CONNECT_PLATFORMS as readonly Platform[]).includes(card.platform);
   const connected = card.account?.connected ?? false;
 
   return (
-    <Card className="flex flex-col">
+    <Card data-testid={`channel-card-${card.platform}`} className="flex flex-col">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
@@ -92,12 +165,20 @@ function ChannelCard({ card }: { card: ChannelCardView }) {
                 : ui.channelsNeverSynced}
             </p>
           </>
+        ) : isCredentialConnect ? (
+          <ConnectCredentialsForm platform={card.platform} />
         ) : (
           <p className="text-sm text-muted-foreground">{requirementText(card.platform, isPublishable)[lang]}</p>
         )}
       </CardContent>
 
-      {!connected && (
+      {connected && card.account && (
+        <div className="border-t border-border p-3">
+          <DisconnectButton channelId={card.account.id} />
+        </div>
+      )}
+
+      {!connected && !isCredentialConnect && (
         <div className="border-t border-border p-3">
           <Button
             type="button"
