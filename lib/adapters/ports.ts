@@ -258,6 +258,19 @@ export interface VoicePort {
  *
  * ⚠ `canPublish()` kontrolü ÇAĞIRANIN işi (`lib/core/publishing.ts`).
  * Yayınlanamayan bir platformu zamanlamak, zamanlayıcının tutamayacağı bir söz.
+ *
+ * ⭐ 17a FAZ B1 — SENKRON/ASENKRON adaptör farkı `publish()`'in İMZASINA
+ * SIZMAZ. Bluesky'nin `createRecord`/`putRecord`'u tek çağrıda biter
+ * (senkron); Instagram Graph'ın container→polling→publish akışı (adım
+ * 16/17b) dakikalar sürebilir (asenkron, vendor tarafında). Bu port ikisini
+ * de AYNI imzayla ("await et, bir `ApiResult` al") taşıyabiliyor çünkü fark
+ * saf bir UYGULAMA detayı: Instagram adaptörü `publish()`'in gövdesi
+ * İÇİNDE kendi bekleme/yoklama döngüsünü çalıştırıp yalnızca sonuçlandığında
+ * döner — port'a "beklemede" gibi ara bir durum EKLEMEK gerekmiyor. Bunun
+ * bedeli iş kuyruğu tarafında ödeniyor: `JOB_RETRY_POLICY.publish.
+ * expectedDurationMs` (`lib/core/jobs/types.ts`) Instagram devreye
+ * girdiğinde büyüyecek (worker'ın `PER_JOB_TIMEOUT_MS`'i de gözden
+ * geçirilmeli) — port'un kendisi DEĞİŞMEYECEK, yalnızca kalibrasyon.
  */
 export interface PublisherPort {
   publish(contentItemId: string): Promise<ApiResult<PublishReceipt>>;

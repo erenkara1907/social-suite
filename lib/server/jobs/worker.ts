@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PermanentJobError } from "@/lib/core/jobs/errors";
 import { JOB_RETRY_POLICY, type JobContext, type JobKind } from "@/lib/core/jobs/types";
 import { JOB_HANDLERS } from "@/lib/server/jobs/handlers";
+import { sanitizeErrorMessage } from "@/lib/server/jobs/sanitize";
 
 /**
  * Çalışma döngüsü — BIRLESIM_PLANI §12 adım 12 FAZ B2/B3.
@@ -72,10 +73,6 @@ export const BATCH_SIZE = 5;
  *  worker'ın kendisi için anlamı yok (sm-worker zaten dakikada bir dönüyor). */
 const MAX_BACKOFF_MS = 10 * 60_000;
 
-/** DB'ye yazılan hata mesajının üst uzunluğu — `last_error` sınırsız
- *  büyümesin diye (kullanıcı arayüzünde de gösterilecek, §12 FAZ C). */
-const MAX_ERROR_MESSAGE_LEN = 500;
-
 const WORKER_ID = `worker-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
 
 export interface WorkerSummary {
@@ -97,24 +94,8 @@ interface JobsRow {
   max_attempts: number;
 }
 
-/** `err.stack`/tam obje ASLA kaydedilmez — yalnızca `.message`, ve bilinen
- *  sır desenleri (Bearer token, API anahtarı benzeri uzun hex/base64 dizi)
- *  maskelenir. Bu ürün müşteri API anahtarları taşıyor (§8.6) — bir
- *  işleyici hata mesajına yanlışlıkla anahtarı gömerse (örn. sağlayıcının
- *  kendi hata metni isteği yankılarsa) burası son savunma hattı. */
-const SECRET_PATTERNS: RegExp[] = [
-  /Bearer\s+[A-Za-z0-9._-]{10,}/gi,
-  /sk-[A-Za-z0-9_-]{10,}/g,
-  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, // JWT benzeri
-  /[A-Za-z0-9+/]{40,}={0,2}/g, // uzun base64/hex anahtar benzeri gövdeler
-];
-
-export function sanitizeErrorMessage(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error);
-  let msg = raw;
-  for (const pattern of SECRET_PATTERNS) msg = msg.replace(pattern, "[REDACTED]");
-  return msg.length > MAX_ERROR_MESSAGE_LEN ? `${msg.slice(0, MAX_ERROR_MESSAGE_LEN)}…` : msg;
-}
+// sanitizeErrorMessage artık lib/server/jobs/sanitize.ts'te — 17a FAZ B3
+// (yukarıdaki import), gerekçe o dosyanın başlığında.
 
 function backoffDelayMs(kind: JobKind, attempts: number): number {
   const base = JOB_RETRY_POLICY[kind].backoffBaseMs;

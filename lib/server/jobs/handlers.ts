@@ -12,6 +12,7 @@ import { toPromptBlock } from "@/lib/core/brand/types";
 import { skeletonToContentItems } from "@/lib/core/plan/calendar";
 import { createDedupeRunBudget, runDedupeCheck } from "@/lib/server/dedupe/run";
 import { getBrandForJob } from "@/lib/server/jobs/context";
+import { publishContentItem } from "@/lib/server/publish/publish-item";
 import { runAnthropicCall } from "@/lib/server/ai/run-provider-call";
 import { runUgcPipelineStep } from "@/lib/server/media/pipeline";
 import { pollMediaJob } from "@/lib/server/media/poll";
@@ -268,6 +269,19 @@ async function handleCaptionWrite(
   });
 }
 
+/**
+ * İnce sarmalayıcı — asıl mantık `lib/server/publish/publish-item.ts`'te
+ * (§12 adım 17a FAZ B2/B3; `PublisherPort.live.publish()` de AYNI
+ * fonksiyonu çağırır, gerekçe o dosyanın başlığında — DRY).
+ */
+async function handlePublish(
+  payload: Extract<AnyJob, { kind: "publish" }>["payload"],
+  ctx: JobContext,
+): Promise<void> {
+  const admin = createAdminClient();
+  await publishContentItem(admin, payload.contentItemId, ctx.jobId);
+}
+
 /** `kind` başına bir işleyici; `payload` o kind'ın `AnyJob`'daki daralmış
  *  hâli — her gövde yalnızca kendi payload tipini görür. */
 export const JOB_HANDLERS: {
@@ -277,9 +291,7 @@ export const JOB_HANDLERS: {
   caption_write: handleCaptionWrite,
   ugc_pipeline: runUgcPipelineStep,
   media_poll: pollMediaJob,
-  async publish() {
-    throw new PermanentJobError(NOT_IMPLEMENTED);
-  },
+  publish: handlePublish,
   async metrics_collect() {
     throw new PermanentJobError(NOT_IMPLEMENTED);
   },

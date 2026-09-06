@@ -40,3 +40,82 @@ export const CREDENTIAL_CONNECT_PLATFORMS: Platform[] = ["bluesky"];
 
 /** Statuses that mean "this is expected to go out on its own". */
 export const AUTOMATED_STATUSES = ["scheduled", "published"] as const;
+
+/* ── 17a FAZ B1 — platform yayın sınırları + ön kontrol yardımcıları ────────
+ *
+ * Bu bölüm PORT'un bilmediği şeyi (bir platformun metin/medya sınırı) PUR
+ * bir fonksiyon olarak tutar — `PublisherPort` hâlâ platform detayı
+ * TAŞIMIYOR (yalnızca `publish(contentItemId)`), ama adaptör/job-handler
+ * katmanı (platformu zaten bilen taraf) bu tabloyu sorgulayarak preflight
+ * yapar. `lib/adapters/ports.ts`'in PublisherPort yorumu bu ayrımı anlatır.
+ */
+
+export interface PublishLimits {
+  /** Unicode grapheme cluster (kullanıcının gördüğü "karakter") sayısı. */
+  maxGraphemes: number;
+  /** UTF-8 bayt sayısı — Türkçe (ve çoğu Latin-dışı) karakterde grapheme
+   *  sayısından FARKLI: "ç" 1 grapheme ama UTF-8'de 2 bayt. */
+  maxBytes: number;
+  maxImages: number;
+  /** Doğrulanmış: `app.bsky.embed.images` lexicon'u — bkz.
+   *  `docs/ADIM_17a_RAPOR.md` §0.1 ve resmi lexicon JSON'u (2.000.000 bayt,
+   *  ikili MB değil — ondalık). */
+  maxImageBytes: number;
+}
+
+/** Bugün yalnızca `bluesky` — değerler resmi AT Protocol lexicon'larından
+ *  doğrulandı (`docs/ADIM_17a_RAPOR.md` §0.1): 300 grapheme / 3000 bayt
+ *  metin, gönderi başına en fazla 4 görsel, görsel başına 2.000.000 bayt. */
+export const PLATFORM_PUBLISH_LIMITS: Partial<Record<Platform, PublishLimits>> = {
+  bluesky: { maxGraphemes: 300, maxBytes: 3000, maxImages: 4, maxImageBytes: 2_000_000 },
+};
+
+/**
+ * Unicode grapheme cluster sayısı — `"İstanbul'da çalışıyorum 👨‍👩‍👧"` gibi bir
+ * dizede `.length` (UTF-16 code unit) YANLIŞ sonuç verir (emoji aile
+ * dizileri birden fazla code unit/code point'ten oluşan TEK grapheme'dir).
+ * `Intl.Segmenter` (Node 18+, motor: ICU) doğru bölücü — AT Protocol'ün
+ * "300 grapheme" sınırı da aynı birimi (Unicode extended grapheme cluster)
+ * kastediyor.
+ */
+export function countGraphemes(text: string): number {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  return [...segmenter.segment(text)].length;
+}
+
+/** UTF-8 bayt uzunluğu — `text.length` (UTF-16 code unit) DEĞİL. Türkçe
+ *  "ç,ğ,ı,ö,ş,ü" gibi harfler UTF-8'de 2 bayt tutar, `.length` bunu 1 sayar. */
+export function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
+export interface TextLimitCheck {
+  ok: boolean;
+  graphemes: number;
+  bytes: number;
+  limits: PublishLimits | null;
+}
+
+/** Bir platformun tanımlı sınırı yoksa (bugün bluesky dışındaki her şey)
+ *  `ok:true` döner — sınırsız değil, henüz TANIMLANMAMIŞ demek; o platform
+ *  zaten `canPublish()`'ten geçemez, bu fonksiyon ikinci bir kapı değil. */
+export function checkTextLimit(platform: Platform, text: string): TextLimitCheck {
+  const limits = PLATFORM_PUBLISH_LIMITS[platform] ?? null;
+  const graphemes = countGraphemes(text);
+  const bytes = utf8ByteLength(text);
+  if (!limits) return { ok: true, graphemes, bytes, limits: null };
+  return { ok: graphemes <= limits.maxGraphemes && bytes <= limits.maxBytes, graphemes, bytes, limits };
+}
+
+/**
+ * İçerik satırından yayınlanacak NİHAİ metni kurar.
+ *
+ * ⚠ `hook` KATILMAZ — `lib/core/ai/caption.ts`'in kendi sözleşmesi gereği
+ * `body` ZATEN hook satırını ilk satır olarak içeriyor ("The full caption
+ * including the hook line"); `hook` yalnızca `/composer`/`/queue`
+ * önizlemesi için AYRI tutulan bir kopya. Burada ikisini birleştirmek hook
+ * satırını gönderide İKİ KEZ göstermek olurdu.
+ */
+export function composePostText(item: { body: string; hashtags: string }): string {
+  return [item.body.trim(), item.hashtags.trim()].filter(Boolean).join("\n\n");
+}

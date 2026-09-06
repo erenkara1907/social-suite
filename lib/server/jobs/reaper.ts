@@ -2,7 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { JOB_RETRY_POLICY, type JobKind } from "@/lib/core/jobs/types";
-import { sanitizeErrorMessage } from "@/lib/server/jobs/worker";
+import { sanitizeErrorMessage } from "@/lib/server/jobs/sanitize";
 
 /**
  * Takılı iş süpürücüsü — BIRLESIM_PLANI §12 adım 13 FAZ A (ADIM_12
@@ -95,6 +95,79 @@ export async function sweepStuckJobs(): Promise<ReaperSummary> {
         .eq("id", row.id);
       summary.requeued += 1;
     }
+  }
+
+  return summary;
+}
+
+/**
+ * `content_items.status='publishing'` kilidi süpürücüsü — §4a/§12 adım 17a
+ * FAZ B2. `00_schema.sql`'in `sm-reaper` cron yorumu bunu zaten vaat
+ * ediyordu ("Kilit süpürücü: 15 dakikadan uzun 'publishing'de kalanı geri
+ * alır") ama gövde hiç yazılmamıştı — bu fonksiyon o boşluğu dolduruyor.
+ *
+ * Yalnızca SÜRECİN TAMAMEN çöktüğü an içindir — normal akışta
+ * `handlePublish` (`lib/server/jobs/handlers.ts`) kendi try/catch'iyle her
+ * zaman `published`/`scheduled`/`failed`'e döner, `publishing`'de takılı
+ * bırakmaz.
+ *
+ * ⚠ KARAR — 'scheduled'a GERİ DÖNER, 'failed'e DEĞİL. Görev metninin
+ * uyardığı risk ("içerik vendor'a gitmiş olabilir, geri döndürüp tekrar
+ * denemek çifte gönderi demek") burada YAPISAL OLARAK kapatıldı: Bluesky
+ * yayını artık deterministik `rkey` (= `content_items.id`) ile
+ * `com.atproto.repo.putRecord` (createRecord DEĞİL) kullanıyor —
+ * `publishBlueskyPost` (`lib/core/providers/bluesky.ts`). `putRecord`
+ * resmi olarak UPSERT'tir: aynı rkey'e ikinci bir yazım YENİ bir gönderi
+ * AÇMAZ, var olanı aynı içerikle değiştirir (görünürde HİÇBİR ŞEY
+ * değişmez). Bu yüzden bir retry — ilk deneme vendor'a hiç ulaşmamış da
+ * olsa, ulaşıp DB güncellemesinden ÖNCE çökmüş de olsa — güvenlidir.
+ * `failed`'e gitmek burada gereksiz bir insan müdahalesi dayatırdı;
+ * gerçek gerekçe `docs/ADIM_17a_RAPOR.md` FAZ B2'de.
+ */
+export const CONTENT_PUBLISHING_STUCK_THRESHOLD_MS = 15 * 60_000;
+
+export interface ContentReaperSummary {
+  thresholdMs: number;
+  scanned: number;
+  reverted: number;
+}
+
+interface StuckContentRow {
+  id: string;
+}
+
+export async function sweepStuckPublishing(): Promise<ContentReaperSummary> {
+  const admin = createAdminClient();
+  const cutoff = new Date(Date.now() - CONTENT_PUBLISHING_STUCK_THRESHOLD_MS).toISOString();
+
+  const { data, error } = await admin
+    .from("content_items")
+    .select("id")
+    .eq("status", "publishing")
+    .lt("locked_at", cutoff);
+  if (error) throw new Error(`sm-reaper: content_items taraması başarısız: ${error.message}`);
+
+  const rows = (data ?? []) as StuckContentRow[];
+  const summary: ContentReaperSummary = {
+    thresholdMs: CONTENT_PUBLISHING_STUCK_THRESHOLD_MS, scanned: rows.length, reverted: 0,
+  };
+
+  const message = sanitizeErrorMessage(
+    new Error(`sm-reaper: ${CONTENT_PUBLISHING_STUCK_THRESHOLD_MS}ms'den uzun süre 'publishing' durumunda askıda kaldı, 'scheduled'a döndürüldü`),
+  );
+
+  for (const row of rows) {
+    // ⚠ Koşullu UPDATE — bu tarama ile şimdi arasında worker kendisi
+    // bitirmiş olabilir (published/failed); ikinci kez 'publishing'
+    // koşuluyla yazmak o durumda 0 satır etkiler, zararsız.
+    const { data: updated } = await admin
+      .from("content_items")
+      .update({ status: "scheduled", failure_error: message, locked_at: null, locked_by: null })
+      .eq("id", row.id)
+      .eq("status", "publishing")
+      .select("id")
+      .maybeSingle();
+    if (updated) summary.reverted += 1;
   }
 
   return summary;

@@ -16,9 +16,39 @@
  * geçerli olup olmadığı — adım 20.5'in "test et" deseninin (`verifyKieKey`
  * vb.) eşleniği, en ucuz uç noktayla (`getSession`, yazma yok).
  */
+import { createHash } from "node:crypto";
 import { Agent, CredentialSession } from "@atproto/api";
 
 export const BLUESKY_SERVICE_URL = "https://bsky.social";
+
+// ── TID (Timestamp Identifier) — 17a FAZ B2 ─────────────────────────────────
+// ⚠ CANLI BULGU (gerçek API hatası, `app.bsky.feed.post.put` çağrısı):
+// `app.bsky.feed.post` koleksiyonu rkey'de AT Protocol'ün genel "any" tipini
+// DEĞİL, özel olarak TID biçimini zorunlu kılıyor — `content_items.id` (bir
+// UUID) doğrudan rkey olarak GÖNDERİLDİĞİNDE sunucu "Invalid TID string"
+// hatasıyla reddetti. Sözdizimi resmi spesifikasyondan doğrulandı:
+// atproto.com/specs/tid — 13 ASCII karakter, ilk karakter `234567abcdefghij`
+// kümesinden, kalan 12 karakter `234567abcdefghijklmnopqrstuvwxyz`'den.
+const TID_ALPHABET = "234567abcdefghijklmnopqrstuvwxyz";
+const TID_FIRST_CHAR_ALPHABET = "234567abcdefghij";
+
+/**
+ * `content_items.id` gibi rastgele bir tohumdan DETERMİNİSTİK, sözdizimsel
+ * olarak geçerli bir TID üretir — gerçek bir saat/clock-id TAŞIMAZ (sıralama
+ * garantisi ya da anlamı YOK, önemli de değil). Tek gereksinim: AYNI tohum
+ * HER ZAMAN aynı rkey'i üretsin — bu, `publishBlueskyPost`'un `putRecord`
+ * ile kurduğu idempotency'nin (bkz. o fonksiyonun başlığı) rkey tarafındaki
+ * yarısı.
+ */
+export function contentItemIdToRkey(contentItemId: string): string {
+  const digest = createHash("sha256").update(contentItemId).digest();
+  const firstChar = TID_FIRST_CHAR_ALPHABET[digest[0] % TID_FIRST_CHAR_ALPHABET.length];
+  let rest = "";
+  for (let i = 1; i <= 12; i++) {
+    rest += TID_ALPHABET[digest[i] % TID_ALPHABET.length];
+  }
+  return firstChar + rest;
+}
 
 /** `@atproto/api`'nin `AtpSessionData`'sının bu uygulamanın taşıdığı alt
  *  kümesi — `email`/`emailConfirmed` gibi hesap-yönetim alanları burada
@@ -111,6 +141,87 @@ export async function refreshBlueskySession(session: BlueskySession): Promise<Bl
       refreshJwt: refreshed.refreshJwt,
     },
   };
+}
+
+/** Yüklenecek tek bir görsel — ham bayt + mime tipi + alt metin. */
+export interface BlueskyImage {
+  bytes: Uint8Array;
+  mimeType: string;
+  alt: string;
+}
+
+export interface BlueskyPostInput {
+  session: BlueskySession;
+  /**
+   * `app.bsky.feed.post` koleksiyonundaki KAYIT ANAHTARI — ÇAĞIRAN üretir
+   * (sunucu değil). Aynı `rkey`'le ikinci bir çağrı YARATMAZ, DEĞİŞTİRİR
+   * (bkz. fonksiyonun kendi başlığı) — bu, `content_items.id`'yi rkey olarak
+   * kullanmanın (§12 adım 17a FAZ B2) çifte yayını yapısal olarak imkânsız
+   * kılmasının kaynağı.
+   */
+  rkey: string;
+  text: string;
+  /** ISO — ÇAĞIRAN sabitler (örn. `content_items.scheduled_at`), `new
+   *  Date()` ile YENİDEN ÜRETİLMEZ; aksi hâlde her yeniden deneme aynı
+   *  rkey'i FARKLI bir `createdAt`'la ezer — tam idempotent olmaz. */
+  createdAt: string;
+  images?: BlueskyImage[];
+}
+
+export interface BlueskyPostReceipt {
+  /** `at://<did>/app.bsky.feed.post/<rkey>` — AT URI. */
+  uri: string;
+  cid: string;
+}
+
+export type BlueskyPostResult = { ok: true; receipt: BlueskyPostReceipt } | { ok: false; error: string };
+
+/**
+ * Gönderiyi yayınlar — `com.atproto.repo.putRecord` (createRecord DEĞİL).
+ *
+ * ⭐ İDEMPOTENCY ARAŞTIRMASI (17a FAZ B2) — `createRecord`'un aynı `rkey`'le
+ * ikinci çağrısı HATA verir ("record already exists" — resmi lexicon bunu
+ * açıkça belgelemiyor, davranış topluluk kaynaklarından doğrulandı: bkz.
+ * `docs/ADIM_17a_RAPOR.md` §B2). `putRecord` ise resmi olarak UPSERT'tir:
+ * `rkey` yoksa YARATIR, VARSA aynı içerikle DEĞİŞTİRİR — sunucu tarafında
+ * gerçek bir "if not exists" kontrolü gerekmeden doğal idempotency verir.
+ * Bu yüzden yayın çağrısı `putRecord`'a taşındı: aynı `content_items.id`'yi
+ * `rkey` olarak kullanan bir RETRY (çökme sonrası reaper geri açtı, ya da
+ * geçici ağ hatası sonrası worker yeniden denedi) AYNI gönderiyi ikinci kez
+ * OLUŞTURMAZ, olsa olsa AYNI içerikle üzerine yazar — görünürde hiçbir şey
+ * değişmez, çifte gönderi YAPISAL OLARAK imkânsız hâle gelir.
+ */
+export async function publishBlueskyPost(input: BlueskyPostInput): Promise<BlueskyPostResult> {
+  const credentialSession = new CredentialSession(new URL(BLUESKY_SERVICE_URL));
+  credentialSession.session = { ...input.session, active: true };
+  const agent = new Agent(credentialSession);
+  try {
+    let embed: { $type: "app.bsky.embed.images"; images: { image: unknown; alt: string }[] } | undefined;
+    if (input.images?.length) {
+      const uploaded: { image: unknown; alt: string }[] = [];
+      for (const image of input.images) {
+        const blobResult = await agent.uploadBlob(image.bytes, { encoding: image.mimeType });
+        uploaded.push({ image: blobResult.data.blob, alt: image.alt });
+      }
+      embed = { $type: "app.bsky.embed.images", images: uploaded };
+    }
+
+    const record: Record<string, unknown> = {
+      $type: "app.bsky.feed.post",
+      text: input.text,
+      createdAt: input.createdAt,
+      ...(embed ? { embed } : {}),
+    };
+
+    const result = await agent.app.bsky.feed.post.put(
+      { repo: input.session.did, rkey: input.rkey },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- record'un tam AppBskyFeedPost.Record tipini burada yeniden kurmak yerine (embed'in beş union üyesinden yalnızca birini kullanıyoruz), lexicon'un kendisi sunucu tarafında zaten doğruluyor.
+      record as any,
+    );
+    return { ok: true, receipt: { uri: result.uri, cid: result.cid } };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
 }
 
 /**

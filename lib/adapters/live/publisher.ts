@@ -1,22 +1,44 @@
 /**
- * PublisherPort — CANLI implementasyon. §12 adım 17.
+ * PublisherPort — CANLI implementasyon. §12 adım 17a FAZ B1.
  *
- * ⚠ İSKELET. Adım 5 arayüzü kuruyor, gövdeyi yazmıyor.
+ * Asıl mantık `lib/server/publish/publish-item.ts`'te — `lib/server/jobs/
+ * handlers.ts`'in `handlePublish`'i (cron/kuyruk yolu) ile AYNI fonksiyonu
+ * paylaşır (DRY, gerekçe o dosyanın başlığında). Bu port bugün hiçbir UI
+ * yolundan ÇAĞRILMIYOR (`/queue`'nun onay akışı içeriği `scheduled`'a
+ * çevirir, `sm-publish` zamanlayıcısı devralır — FAZ D) ama arayüzün
+ * "platform detayı taşımaz" sözleşmesini tutmak için gerçek bir gövdesi
+ * olmalı; yarın doğrudan bir "şimdi yayınla" düğmesi eklenirse buraya bağlanır.
  *
- * ⚠ Bu dosyada `process.env` OKUNMAZ. Müşteri anahtarı
- * `provider_credentials` + Vault'tan gelir (§8.6) ve buraya PARAMETRE
- * olarak iner — env'den okunan bir anahtar tüm müşteriler için ortak olurdu.
- * Çözüm katmanı adım 13'te yazılacak.
+ * ⚠ Bu dosyada `process.env` OKUNMAZ — kimlik bilgisi `channel_credentials`
+ * satırından (`publishContentItem` içinde) okunur.
  */
 import type { PublisherPort } from "@/lib/adapters/ports";
-
-const NOT_IMPLEMENTED = "not implemented";
+import { PermanentJobError } from "@/lib/core/jobs/errors";
+import { PUBLISHABLE_PLATFORMS } from "@/lib/core/publishing";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { publishContentItem } from "@/lib/server/publish/publish-item";
 
 export const livePublisher: PublisherPort = {
-  async publish() {
-    throw new Error(NOT_IMPLEMENTED);
+  async publish(contentItemId) {
+    const admin = createAdminClient();
+    try {
+      const result = await publishContentItem(admin, contentItemId, "direct-publish");
+      if (!result) {
+        return {
+          ok: false,
+          error: { code: "publish_failed", detail: "içerik 'scheduled' durumunda değil (zaten yayınlanıyor/yayınlanmış olabilir)" },
+        };
+      }
+      return {
+        ok: true,
+        data: { externalPostId: result.externalPostId, publishedAt: result.publishedAt, permalink: result.permalink },
+      };
+    } catch (error) {
+      const code = error instanceof PermanentJobError ? "publish_failed" : "upstream_error";
+      return { ok: false, error: { code, detail: error instanceof Error ? error.message : String(error) } };
+    }
   },
   supported() {
-    throw new Error(NOT_IMPLEMENTED);
+    return PUBLISHABLE_PLATFORMS;
   },
 };

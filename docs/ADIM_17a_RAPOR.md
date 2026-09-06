@@ -249,6 +249,143 @@ ayrıca ele alınacak.
 
 **Commit:** `kanal bağlama canlı kanıtı (17a-a2)`.
 
-## FAZ B–E ve SON RAPOR
+## FAZ B — Yayın hattı
+
+### B1 — Port/adaptör ayrımı
+
+`PublisherPort.publish(contentItemId): Promise<ApiResult<PublishReceipt>>`
+DEĞİŞMEDİ — imza Bluesky'nin senkron `putRecord`'unu da, Instagram'ın
+(adım 16/17b) asenkron container→polling→publish akışını da taşıyabilir,
+çünkü fark saf bir UYGULAMA detayı: bir adaptör kendi bekleme döngüsünü
+gövdesi İÇİNDE çalıştırıp yalnızca sonuçlandığında döner. Bedel iş kuyruğu
+tarafında ödenir — Instagram devreye girdiğinde `JOB_RETRY_POLICY.publish.
+expectedDurationMs` (bugün 10sn) ve worker'ın `PER_JOB_TIMEOUT_MS`'i (bugün
+20sn) yeniden kalibre edilmeli. Ayrıntı: `lib/adapters/ports.ts`
+`PublisherPort` yorumu.
+
+Gerçek yayın mantığı `lib/server/publish/publish-item.ts`'te — hem
+`lib/server/jobs/handlers.ts`'in `handlePublish`'i (cron yolu) hem
+`lib/adapters/live/publisher.ts`'in `publish()`'i (port yolu, bugün hiçbir
+UI çağırmıyor ama arayüz gerçek olmalı) AYNI fonksiyonu çağırır.
+
+**Metin sınırı:** `lib/core/publishing.ts` → `countGraphemes` (Unicode
+grapheme cluster, `Intl.Segmenter`), `utf8ByteLength`, `checkTextLimit`.
+Testler (`publishing.test.ts`) gerçek Türkçe karakterlerle ("çğıöşü") VE
+Unicode aile emojisiyle (`👨‍👩‍👧‍👦`, tek grapheme ama 25 UTF-8 bayt) grapheme ile
+bayt sayımının GERÇEKTEN farklı ölçüldüğünü kanıtlıyor — 22/22 geçti.
+
+**Medya:** `guardedFetch` (adım 19'un SSRF korumalı indiricisi) ile
+Supabase Storage'ın kalıcı URL'inden çekilir, `agent.uploadBlob()` ile
+Bluesky'ye yüklenir. 2.000.000 baytı aşan görsel `PermanentJobError` ile
+YAYINDAN ÖNCE durdurulur (yeniden deneme faydasız — kaynak dosya
+küçültülmeli).
+
+### B2 — ⚠ `publishing` kilidi (en kritik parça)
+
+**Kilit:** Koşullu `UPDATE content_items SET status='publishing' ...
+WHERE status='scheduled'` — `publish-item.ts` `publishContentItem()`.
+
+**⭐ ÇİFTE YAYIN TESTİNİN GERÇEK ÇIKTISI** (`publish-item.live.test.ts`,
+iki `publishContentItem()` çağrısı `Promise.all` ile GERÇEKTEN eşzamanlı):
+
+```
+[çifte yayın canlı] worker-a — {"externalPostId":"at://did:plc:h4uy2bqzvjobgsyhzslvloys/app.bsky.feed.post/4dkwvfhee2jyr", ...}
+[çifte yayın canlı] worker-b — null
+```
+
+`worker-a` kilidi kazandı ve GERÇEKTEN yayınladı; `worker-b`'nin koşullu
+UPDATE'i 0 satır etkiledi, `null` döndü, hiçbir ağ çağrısı yapmadan çıktı.
+İçerik satırı sonunda `published` — tam olarak BİR gönderi.
+
+**Reaper (`sm-reaper`) `content_items` desteği:** YOKTU (kontrol edildi —
+`lib/server/jobs/reaper.ts` yalnızca `jobs.state='running'` süpürüyordu),
+bu fazda eklendi: `sweepStuckPublishing()`, eşik 15 dakika (`00_schema.sql`
+`sm-reaper` cron yorumunun zaten vaat ettiği sayı). `/api/cron/reaper`
+şimdi ikisini de (`jobs` + `content_items`) tek yanıtta döndürüyor.
+
+**⚠ KARAR — asılı kalan içerik `scheduled`'a döner, `failed`'e DEĞİL.**
+Gerekçe, görev metninin uyardığı riski YAPISAL OLARAK ortadan kaldıran bir
+araştırma bulgusuna dayanıyor:
+
+1. Bluesky'nin `createRecord`'unun aynı `rkey`'le ikinci çağrısı HATA verir
+   (resmi lexicon bunu açıkça yazmıyor, topluluk kaynağından doğrulandı:
+   "Bitesize Proto: Upserting ATProto Records", marvins-guide.leaflet.pub).
+2. `com.atproto.repo.putRecord` ise resmi olarak UPSERT'tir: rkey yoksa
+   YARATIR, VARSA aynı içerikle DEĞİŞTİRİR.
+3. Yayın çağrısı bu yüzden `createRecord` DEĞİL `putRecord` kullanıyor
+   (`publishBlueskyPost`, `lib/core/providers/bluesky.ts`) — DETERMİNİSTİK
+   bir `rkey` (`content_items.id`'den türetilen TID, aşağıda) ve
+   deterministik bir `createdAt` (`content_items.scheduled_at`, `new
+   Date()` DEĞİL) ile.
+4. Sonuç: bir retry — ister reaper'ın açtığı, ister geçici bir hata sonrası
+   worker'ın kendi denemesi — AYNI rkey'e AYNI içerikle yazar. İlk deneme
+   vendor'a hiç ulaşmamışsa YENİ bir gönderi açar; ulaşmış ama DB
+   yazımından ÖNCE çökmüşse GÖRÜNMEDEN üzerine yazar. İkisi de kullanıcı
+   için "gönderi bir kez yayında" sonucunu verir — çifte gönderi YAPISAL
+   OLARAK imkânsız.
+
+Bu, `sweepStuckPublishing()`'in ASILI KALMA TESTİYLE canlı kanıtlandı
+(20 dakika önce kilitlenmiş gibi elle işaretlenen bir satır → reaper →
+`scheduled`, `locked_at` temizlendi):
+
+```
+[reaper canlı] özet — {"thresholdMs":900000,"scanned":1,"reverted":1}
+```
+
+**⚠ CANLI BULGU — TID zorunluluğu (araştırmanın kendisi eksikti, canlı test
+yakaladı).** İlk denemede `rkey` olarak doğrudan `content_items.id` (bir
+UUID) kullanıldı; AT Protocol'ün genel rkey sözdizimi (alfasayısal + `.-_:~`)
+buna izin verir GİBİ göründü, ama gerçek API çağrısı şu hatayla reddetti:
+`"Invalid record key for app.bsky.feed.post: Invalid TID string"`.
+Araştırma (atproto.com/specs/tid) `app.bsky.feed.post` koleksiyonunun
+rkey'i özel olarak TID biçimine (`/^[234567abcdefghij][234567a-z]{12}$/`,
+13 ASCII karakter) zorunlu kıldığını doğruladı. Çözüm: `contentItemIdToRkey()`
+(`lib/core/providers/bluesky.ts`) — `content_items.id`'yi SHA-256'layıp TID
+alfabesine deterministik eşliyor (gerçek bir saat/clock-id TAŞIMIYOR,
+yalnızca AYNI içerik HER ZAMAN AYNI rkey'i üretiyor — idempotency'nin rkey
+tarafı budur). Bu, "API ayrıntılarını doğrula, uydurma" uyarısının tam
+olarak neden var olduğunun kanıtı: ilk varsayım (genel sözdizimi yeter)
+YANLIŞTI, yalnızca gerçek bir çağrı bunu ortaya çıkardı.
+
+### B3 — `publish` handler'ı
+
+`lib/server/publish/publish-item.ts` `publishContentItem()` — kilit
+alındıktan SONRA, yayından ÖNCE ön kontroller (adım 20.5 deseni): platform
+desteği, kanal bağlı mı, token geçerli mi (`verifyBlueskySession`, geçersizse
+`refreshBlueskySession` — 90 günlük `refreshJwt` süresi dolmuşsa ya da
+oturum iptal edilmişse kanal `is_connected=false`'a düşer, kullanıcı yeniden
+bağlanmalı), metin sınırı, medya boyutu.
+
+Başarı → `content_items.status='published'`, `published_at`,
+`external_post_id` (Bluesky'nin `at://` URI'si — adım 18'in metrik
+toplayıcısı buna ihtiyaç duyacak), `activity` kaydı (`action:"published"`,
+`meta.permalink`). Başarısızlık → `sanitizeErrorMessage` ile temizlenmiş
+hata `content_items.failure_error`'a (asla token/anahtar sızdırmadan);
+kalıcı hata → `failed`, geçici hata → `scheduled` (B2'nin idempotency
+gerekçesiyle güvenli).
+
+### FAZ B DOĞRULAMA — hepsi `lib/server/publish/publish-item.live.test.ts`
+ile GERÇEK Bluesky hesabına karşı kanıtlandı (4/4 geçti):
+
+- **Gerçek bir gönderi gerçekten yayınlandı:**
+  `https://bsky.app/profile/did:plc:h4uy2bqzvjobgsyhzslvloys/post/5kpyiwbujve2l`
+  (ilk koşu) — bsky.app'te canlı, gerçek bir hesapta.
+- **Çifte yayın testi:** yukarıda — iki eşzamanlı `publishContentItem()`
+  çağrısından biri gerçek sonuç, diğeri `null` döndü; içerik tam bir kez
+  yayınlandı.
+- **Asılı kalma testi:** yukarıda — reaper stuck satırı `scheduled`'a
+  döndürdü, kilit temizlendi.
+- **Metin sınırı aşan içerik:** 400 grapheme'lik bir gövde `putRecord`'a
+  HİÇ ULAŞMADAN `PermanentJobError` ile durduruldu, `content_items.status`
+  `failed`'e döndü, `failure_error` metin sınırını adlandırıyor.
+
+⚠ Bu testler gerçek gönderiler oluşturduğu için test hesabında birkaç canlı
+gönderi kaldı (DB satırları `afterAll`'da temizlendi, Bluesky'deki
+gönderilerin KENDİSİ silinmedi — bu kasıtlı, "gerçek yayın" kanıtının
+kendisi bu). İstenirse test hesabından elle silinebilir.
+
+**Commit:** `yayın hattı (17a-b)`.
+
+## FAZ C–E ve SON RAPOR
 
 Henüz başlanmadı.
