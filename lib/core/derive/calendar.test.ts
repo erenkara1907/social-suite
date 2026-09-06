@@ -170,8 +170,25 @@ describe("buildQueue", () => {
     expect(buildQueue([], MONDAY_NOON, TZ)).toEqual([]);
   });
 
-  it("yayınlanmış satırları dışlar", () => {
+  it("24 saatten eski yayınlanmış satırları dışlar", () => {
     const posts = [item({ id: "1", platform: "instagram", kind: "image", status: "published", title: "a", published_at: "2026-08-20T09:00:00Z" })];
+    expect(buildQueue(posts, MONDAY_NOON, TZ)).toEqual([]);
+  });
+
+  it("⭐ 17a FAZ D — son 24 saatte yayınlanmış satırı TUTAR, externalPostId'i taşır", () => {
+    const posts = [item({
+      id: "1", platform: "bluesky", kind: "text", status: "published", title: "a",
+      published_at: "2026-08-24T02:00:00Z", // MONDAY_NOON'dan 7 saat önce
+      external_post_id: "at://did:plc:abc/app.bsky.feed.post/xyz",
+    })];
+    const [row] = buildQueue(posts, MONDAY_NOON, TZ);
+    expect(row).toBeDefined();
+    expect(row.status).toBe("published");
+    expect(row.externalPostId).toBe("at://did:plc:abc/app.bsky.feed.post/xyz");
+  });
+
+  it("published_at yoksa (tutarsız veri) yine de dışlanır, patlamaz", () => {
+    const posts = [item({ id: "1", platform: "bluesky", kind: "text", status: "published", title: "a", published_at: null })];
     expect(buildQueue(posts, MONDAY_NOON, TZ)).toEqual([]);
   });
 

@@ -199,10 +199,22 @@ export function buildChains(items: ContentItemRow[]): ChainGroup[] {
     .map((group) => [...group].sort((a, b) => a.chain_position - b.chain_position));
 }
 
-/** Anything not yet published, soonest first; loose drafts sink to the bottom. */
+/** §12 adım 17a FAZ D — yeni yayınlanmış bir satırın "gerçekten gitti mi"
+ *  anını ve gönderi bağlantısını görebilmesi için kuyrukta ne kadar kalır. */
+const RECENTLY_PUBLISHED_WINDOW_MS = 24 * 60 * 60_000;
+
+/** Henüz yayınlanmamış her şey, en yakın tarih önce; tarihsiz taslaklar dibe
+ *  batar. ⭐ 17a FAZ D — son 24 saatte yayınlanmış satırlar da TUTULUR
+ *  (öncesi HARİÇ) — kullanıcı "gerçekten yayınlandı mı" anını ve platform
+ *  bağlantısını (`externalPostId`) görebilsin. Daha eski yayın geçmişi
+ *  buranın işi değil (ör. `/analytics`). */
 export function buildQueue(posts: ContentItemRow[], now: Date, tz = DEFAULT_TZ): QueueItem[] {
   return posts
-    .filter((p) => p.status !== "published")
+    .filter((p) => {
+      if (p.status !== "published") return true;
+      if (!p.published_at) return false;
+      return now.getTime() - new Date(p.published_at).getTime() <= RECENTLY_PUBLISHED_WINDOW_MS;
+    })
     .sort((a, b) => {
       if (!a.scheduled_at) return 1;
       if (!b.scheduled_at) return -1;
@@ -219,6 +231,7 @@ export function buildQueue(posts: ContentItemRow[], now: Date, tz = DEFAULT_TZ):
       slot: p.scheduled_at ? zonedTime(p.scheduled_at, tz) : "—",
       status: p.status,
       best: p.is_best_time,
+      externalPostId: p.external_post_id,
     }));
 }
 

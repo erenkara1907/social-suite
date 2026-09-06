@@ -1,4 +1,4 @@
-import { port } from "@/lib/adapters";
+import { isDemo, port } from "@/lib/adapters";
 import { requireBrand } from "@/lib/server/auth";
 import { requestModeOverrides } from "@/lib/server/mode";
 import { getJobsSummary } from "@/lib/server/jobs/status";
@@ -63,7 +63,7 @@ export default async function Page() {
   return (
     <div className="space-y-6">
       <JobsQueueStatus summary={jobsSummary} />
-      <QueueView rows={rows} chains={chains} duplicateBlocked={duplicateBlocked} />
+      <QueueView rows={rows} chains={chains} duplicateBlocked={duplicateBlocked} isDemo={isDemo("content", overrides)} />
     </div>
   );
 }

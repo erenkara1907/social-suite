@@ -70,9 +70,21 @@ test.describe("channels — Bluesky gerçek bağlanma (17a FAZ A)", () => {
     await expect(card.getByText("Bağlı", { exact: true })).toBeVisible({ timeout: 15_000 });
 
     // ⭐ SQL kanıtı 1 — service-role: satır GERÇEKTEN var, token dolu.
+    //
+    // ⚠ CANLI BULGU — `brand_id` filtresi ZORUNLU. Aynı gerçek Bluesky test
+    // hesabı (`IDENTIFIER`) artık birden fazla markada bağlı olabiliyor
+    // (FAZ B/C'nin "Carino Pizza" canlı testleri AYNI hesabı kullanıyor) —
+    // yalnızca platform+handle'a göre sorgulamak `PGRST116` (birden fazla
+    // satır) ile patladı, marka bazlı ayrım olmadan bu sorgu YAPISAL OLARAK
+    // yanlıştı.
+    const { data: brand, error: brandError } = await admin
+      .from("brands").select("id").eq("owner_id", user.userId).single<{ id: string }>();
+    if (brandError || !brand) throw new Error(`marka bulunamadı: ${brandError?.message}`);
+
     const { data: channelRow, error: channelError } = await admin
       .from("channels")
       .select("id,platform,handle,is_connected")
+      .eq("brand_id", brand.id)
       .eq("platform", "bluesky")
       .eq("handle", `@${IDENTIFIER}`)
       .maybeSingle();

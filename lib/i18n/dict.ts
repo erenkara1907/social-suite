@@ -193,6 +193,7 @@ export const ui = {
     queueActionDisabledHint: "Demo modda devre dışı",
     queueReschedule: "Yeniden zamanla",
     queueCancel: "İptal",
+    queueViewPublished: "Gönderiyi gör",
     // ── adım 12: iş kuyruğu görünürlüğü ──────────────────────────────────
     jobsQueueTitle: "İş kuyruğu durumu",
     jobsQueueHint: "Arka plan işleri — plan üretimi, yayın, metrik toplama. Adım 14'ten itibaren dolacak; şu an boşsa bu beklenen.",
@@ -497,6 +498,7 @@ export const ui = {
     queueActionDisabledHint: "Disabled in demo mode",
     queueReschedule: "Reschedule",
     queueCancel: "Cancel",
+    queueViewPublished: "View post",
     // ── step 12: job queue visibility ────────────────────────────────────
     jobsQueueTitle: "Job queue status",
     jobsQueueHint: "Background jobs — plan generation, publishing, metrics collection. Fills in from step 14 onward; empty is expected for now.",

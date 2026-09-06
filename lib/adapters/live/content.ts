@@ -1,16 +1,16 @@
 /**
- * ContentPort — CANLI implementasyon. §12 adım 8, 12.
+ * ContentPort — CANLI implementasyon. §12 adım 8, 12, 17a FAZ D.
  *
- * ⚠ KISMİ — yalnızca `list`/`get`/`listActivity`/`markUgcRequested`/
- * `listUgcRequested` dolduruldu (§12 adım 20 FAZ C'nin `/plan`,`/studio`
- * sayfalarının GERÇEKTEN çağırdığı beş metot — bkz. `grep -rn
- * "contentPort\." app/`). `create`/`update`/`archive`/`listChain` hâlâ
- * `NOT_IMPLEMENTED`: hiçbir canlı çağıran yok — `plan_generate`/
- * `caption_write` işleyicileri `content_items`'ı service-role admin
- * client'la DOĞRUDAN yazıyor (`lib/server/jobs/handlers.ts`), bu portun
- * ÜZERİNDEN GEÇMİYOR (aynı "üç yer" ayrımı: kuyruk işleyicisi service-role,
- * etkileşimli sayfa oturum istemcisi). Kalan dördü gerçek bir çağıran
- * belirince dolacak.
+ * ⚠ KISMİ — `create`/`listChain` hâlâ `NOT_IMPLEMENTED`: hiçbir canlı
+ * çağıran yok — `plan_generate`/`caption_write` işleyicileri
+ * `content_items`'ı service-role admin client'la DOĞRUDAN yazıyor
+ * (`lib/server/jobs/handlers.ts`), bu portun ÜZERİNDEN GEÇMİYOR (aynı "üç
+ * yer" ayrımı: kuyruk işleyicisi service-role, etkileşimli sayfa oturum
+ * istemcisi). İkisi gerçek bir çağıran belirince dolacak.
+ *
+ * `update`/`archive` FAZ D'de dolduruldu — `/queue`'nun onay/yeniden
+ * zamanlama/iptal düğmeleri artık gerçek çağıran (`app/(app)/queue/
+ * actions.ts`).
  *
  * ⚠ Bu dosyada `process.env` OKUNMAZ.
  */
@@ -76,11 +76,38 @@ export const liveContent: ContentPort = {
   async create() {
     throw new Error(NOT_IMPLEMENTED);
   },
-  async update() {
-    throw new Error(NOT_IMPLEMENTED);
+  // ⭐ 17a FAZ D — /queue'nun onay/yeniden zamanlama/iptal düğmeleri artık
+  // gerçek çağıran. RLS'ten geçen normal oturum istemcisiyle (`owns_brand()`),
+  // service-role DEĞİL — bu etkileşimli bir kullanıcı eylemi (§5 "üç yer"
+  // kuralı bunu kapsamıyor, tıpkı list/get gibi).
+  async update(id, patch) {
+    const { supabase, brandId } = await scopedClient();
+    const { data, error } = await supabase
+      .from("content_items")
+      .update(patch)
+      .eq("id", id)
+      .eq("brand_id", brandId)
+      .select(CONTENT_COLUMNS)
+      .maybeSingle<ContentItemRow>();
+    if (error) return { ok: false, error: { code: "upstream_error", detail: error.message } };
+    if (!data) return { ok: false, error: { code: "not_found" } };
+    return { ok: true, data };
   },
-  async archive() {
-    throw new Error(NOT_IMPLEMENTED);
+  // §4a — silme YOK, yalnızca 'archived'. Tekrar önleme motoru (§4c) arşivli
+  // satırları da fingerprint/embedding kontrolünde okuyor — bu yüzden UPDATE,
+  // DELETE değil.
+  async archive(id) {
+    const { supabase, brandId } = await scopedClient();
+    const { data, error } = await supabase
+      .from("content_items")
+      .update({ status: "archived" })
+      .eq("id", id)
+      .eq("brand_id", brandId)
+      .select(CONTENT_COLUMNS)
+      .maybeSingle<ContentItemRow>();
+    if (error) return { ok: false, error: { code: "upstream_error", detail: error.message } };
+    if (!data) return { ok: false, error: { code: "not_found" } };
+    return { ok: true, data };
   },
 
   async listActivity(limit = DEFAULT_ACTIVITY_LIMIT) {

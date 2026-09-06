@@ -112,7 +112,7 @@ export type NewContent = Pick<
 export type ContentPatch = Partial<Pick<
   ContentItemRow,
   "title" | "hook" | "body" | "hashtags" | "kind" | "media_type" |
-  "scheduled_at" | "is_best_time" | "media_url" | "status"
+  "scheduled_at" | "is_best_time" | "media_url" | "status" | "channel_id"
 >>;
 
 /* ── 2. PlannerPort ───────────────────────────────────────────────────────── */

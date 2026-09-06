@@ -119,3 +119,21 @@ export function checkTextLimit(platform: Platform, text: string): TextLimitCheck
 export function composePostText(item: { body: string; hashtags: string }): string {
   return [item.body.trim(), item.hashtags.trim()].filter(Boolean).join("\n\n");
 }
+
+/**
+ * `content_items.external_post_id` Bluesky için bir AT URI'dir
+ * (`at://<did>/app.bsky.feed.post/<rkey>`) — tarayıcıda AÇILAMAZ. `/queue`
+ * (17a FAZ D) yayınlanan gönderiye gerçek bir bağlantı gösterirken bunu
+ * `https://bsky.app/profile/<did>/post/<rkey>`'e çevirir.
+ *
+ * ⚠ Bu fonksiyon BİLEREK `lib/core/providers/bluesky.ts`'te DEĞİL — o dosya
+ * `node:crypto`/`@atproto/api` import ediyor (sunucu-yalnızca), `/queue`'nun
+ * "use client" görünümü buradan içe aktaramaz. Bu dosya (publishing.ts)
+ * zaten `channels-view.tsx` gibi istemci bileşenlerinden güvenle içe
+ * aktarılıyor — aynı güvenlik burada da geçerli.
+ */
+export function atUriToBlueskyPermalink(atUri: string): string | null {
+  const match = /^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/.exec(atUri);
+  if (!match) return null;
+  return `https://bsky.app/profile/${match[1]}/post/${match[2]}`;
+}

@@ -447,6 +447,10 @@ export interface QueueItem {
   slot: string;
   status: PostStatus;
   best?: boolean;
+  /** ⭐ 17a FAZ D — `content_items.external_post_id` (Bluesky için bir AT
+   *  URI). `null` — henüz yayınlanmadı. Görüntülenebilir bağlantıya çevirmek
+   *  `lib/core/publishing.ts` `atUriToBlueskyPermalink()`'in işi. */
+  externalPostId?: string | null;
 }
 
 export interface DKpi {

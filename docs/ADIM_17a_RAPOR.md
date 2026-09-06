@@ -482,6 +482,78 @@ kuralına uyularak.
 
 **Commit:** `cron aktivasyonu (17a-c)`.
 
-## FAZ D–E ve SON RAPOR
+## FAZ D — /queue gerçek yayın
+
+**Onay** (`app/(app)/queue/actions.ts` `approveAction`) `needs_review`/
+`draft`/`failed` → `scheduled` geçişini yapar, İKİ koşulu birlikte
+doğrular: platform bugün yayınlanabilir mi (`canPublish`) VE markanın o
+platform için bağlı bir kanalı var mı. ⭐ Gerçek bir üretim boşluğunu
+kapatıyor: `content_items.channel_id` oluşturulduğunda HER ZAMAN `null`
+(`lib/core/plan/calendar.ts`) — hiçbir yol onu daha önce doldurmuyordu;
+onay artık bu atamayı yapıyor.
+
+**Yeniden zamanlama** (`rescheduleAction`) yeni bir `scheduled_at` yazar;
+`failed` bir satırı `scheduled`'a döndürerek kurtarma yolu da olur
+(`putRecord`'un idempotency'si sayesinde güvenli, FAZ B2).
+
+**⚠ CANLI BULGU (e2e testiyle yakalandı) — saat dilimi hatası.** İlk
+yazımda `new Date(datetimeLocalString)` kullanılıyordu; `<input
+type="datetime-local">` saat dilimi TAŞIMAZ, bu yüzden `new Date()` bunu
+SUNUCU SÜRECİNİN ÖRTÜK saat dilimiyle yorumluyordu — yerel makinede
+(Europe/Istanbul) doğru çalıştı ama üretimde (Vercel, örtük UTC) SESSİZCE
+3 saat kayacaktı. Düzeltme: markanın kendi saat dilimiyle `zonedTimeToUtc()`
+(`lib/core/tz.ts` — `lib/core/plan/calendar.ts`'in AYNI sorunu çözdüğü
+fonksiyon, tekrar kullanıldı, icat edilmedi).
+
+**İptal** (`cancelAction`) → `archived` (§4a: silme yok, tekrar önleme
+motoru okumaya devam eder).
+
+**Canlı durum + platform bağlantısı:** `publishing` kilidi zaten canlı
+görünüyordu (adım 8). ⭐ Yeni: `buildQueue` artık son 24 saatte
+yayınlanmış satırları da TUTUYOR (öncesi hariç) — kullanıcı "gerçekten
+gitti mi" anını ve gerçek platform bağlantısını (`atUriToBlueskyPermalink`,
+`content_items.external_post_id`'nin AT URI'sini `bsky.app` linkine
+çevirir) görebilsin diye.
+
+**Demo izolasyonu:** `QueueActions` artık `isDemo` alıyor — demo modda
+üçü de hâlâ `disabled` + "Demo modda devre dışı" ipucu (sıfır dış istek);
+canlı modda gerçek `useActionState` formları.
+
+**Gerçek çağıran eksikliği kapatıldı:** `ContentPort.live.update()`/
+`archive()` `NOT_IMPLEMENTED` idi (hiçbir çağıran yoktu) — FAZ D'nin üç
+düğmesi ilk gerçek çağıran, ikisi de gerçek RLS'ten geçen oturum
+istemcisiyle dolduruldu.
+
+### FAZ D DOĞRULAMA — `e2e/queue-actions.spec.ts`, ÜÇ düğmeye GERÇEK
+tıklama (adım 20.5 kuralı):
+
+```
+✓ /queue — gerçek onay/yeniden zamanlama/iptal (17a FAZ D) ›
+  üç düğme de GERÇEKTEN tıklanır ve content_items durumunu değiştirir
+```
+
+Sırasıyla kanıtlanan: Onayla tıklanır → `status='scheduled'` +
+`channel_id` gerçek kanala atanır (psql `.poll` ile doğrulandı); Yeniden
+zamanla tıklanır → yeni tarih girilir → `scheduled_at` markanın saat
+diliminde doğru UTC'ye çevrilmiş olarak yazılır; İptal tıklanır →
+`status='archived'`, satır sayfa yenilendiğinde kuyruktan kaybolur.
+
+**⚠ İkinci canlı bulgu (tam takım regresyonunda yakalandı) — e2e test
+izolasyon hatası, uygulama hatası DEĞİL.** `e2e/channels-connect.spec.ts`
+(FAZ A) doğrulama sorgusu yalnızca `platform`+`handle`'a göre filtreliyordu,
+`brand_id` YOKTU. FAZ B/C'nin canlı testleri AYNI gerçek Bluesky hesabını
+"Carino Pizza" markasında da bağladığı için bu sorgu artık İKİ satırla
+eşleşiyordu (`PGRST116`), test patlıyordu ve yarım kalan bağlantı
+sonraki `queue-actions.spec.ts` koşusuna yanlış kanalın seçilmesi olarak
+sızıyordu. Düzeltme: sorguya `brand_id` filtresi eklendi — tam takım
+(15/15) tekrar yeşil.
+
+**Doğrulama:** tsc/eslint temiz, vitest 553 geçti (+2 `calendar.test.ts`),
+`npm run build` başarılı, Playwright tam takım (15/15, demo izolasyonu
+dahil — `smoke.spec.ts` hâlâ sıfır yabancı ağ isteği kanıtlıyor).
+
+**Commit:** `/queue gerçek yayın (17a-d)`.
+
+## FAZ E ve SON RAPOR
 
 Henüz başlanmadı.
