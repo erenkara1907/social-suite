@@ -386,6 +386,102 @@ kendisi bu). İstenirse test hesabından elle silinebilir.
 
 **Commit:** `yayın hattı (17a-b)`.
 
-## FAZ C–E ve SON RAPOR
+## FAZ C — Cron aktivasyonu (İLK KEZ)
+
+⚠ Cron adım 2'den beri 5/5 pasifti — bu, üretimde otomatik kodun İLK
+gerçek çalışması.
+
+### C1 — Aktivasyon öncesi kontroller
+
+- **`APP_URL` üretim mi:** HAYIR — `NEXT_PUBLIC_APP_URL` hâlâ
+  `http://localhost:3000`'du (`docs/CRON_AKTIVASYON.md`'nin bildiği durum).
+  Düzeltildi: `https://app-gold-one-92.vercel.app` (mevcut Vercel production
+  alias'ı — proje zaten bağlıydı, `prj_mUcuOOvfBhhXcIDwLGWv7VWixzne`).
+- **Deploy:** bugünkü dört commit'i (17a-0/a/a2/b) içeren güncel kod
+  `vercel --prod` ile deploy edildi (`dpl_5KmWtUdYetZVzBVbK4rS9Yd4ydB7`).
+  `/api/cron/{worker,reaper,publish}` üçü de deploy sonrası gerçek istekle
+  doğrulandı: sırsız → 401, doğru sırla → 200 + gerçek JSON.
+- **`CRON_SECRET` üretimde doğru mu:** Vercel'in mevcut değeri `vercel env
+  pull` ile OKUNAMADI (Secret tipi, CLI değeri maskeliyor) — varsayımla
+  ilerlemek yerine Vercel'in `CRON_SECRET`'ı SİLİNİP `.env.local`'daki
+  DEĞERLE yeniden eklendi, üçünün (yerel/Vercel/Vault) aynı olduğu garanti
+  edildi.
+- **`net._http_response` temiz mi:** eski 5 kayıt (2026-08-28, hepsi
+  `status_code=null` — ADIM_27'nin bildiği "Couldn't connect" deseni,
+  o zamanki localhost URL'inden) DIŞINDA temizdi; bunlar geçmişte kalan,
+  zararsız kalıntılar (yeni URL'le tekrar oluşmayacaklar — doğrulandı).
+- **Kill switch:** `cron.alter_job(jobid, active := false)` — tek SQL
+  komutu, üçünü de ANINDA durdurdu (aşağıda kanıtlı). `supabase/apply.sh`'ın
+  kendi `set_cron_active()` fonksiyonuyla AYNI mekanizma — yeni bir şey
+  icat edilmedi.
+- `bash supabase/apply.sh` (CRON_ACTIVE=false, varsayılan) yeniden
+  çalıştırıldı — yalnızca bunun için: `cron_fire()` fonksiyonunun İÇİNE
+  gömülü `__APP_URL__` artık production'ı gösteriyor
+  (`select prosrc from pg_proc where proname='cron_fire'` ile doğrulandı).
+  5 job da apply sonrası hâlâ `active=false` (idempotent — beklenen).
+
+### C2 — Kademeli aktivasyon (gerçek zaman damgalarıyla)
+
+1. **`sm-worker`** aktive edildi (21:33). 4 gerçek tur izlendi
+   (21:33–21:36), hepsi `succeeded`, `net._http_response` hepsi `200`.
+   ⭐ Bu ilk turda worker GERÇEKTEN 16 eski, yetim iş buldu (3 Eylül'den
+   kalma e2e test artığı — silinmiş persona/media_jobs'a referans veren
+   `ugc_pipeline`/`media_poll` işleri) ve doğru şekilde `dead`'e attı —
+   worker'ın ölü mektup mantığının üretimdeki İLK gerçek kanıtı, ayrıca
+   sağlıklı bir davranış (yeni bir sorun DEĞİL).
+2. **`sm-reaper`** aktive edildi (21:37). İlk turu 21:40'ta geldi,
+   `succeeded`, hata yok (`scanned` alanları sıfır — tutarlı, o an askıda
+   kalan hiçbir şey yoktu).
+3. **`sm-publish`** aktive edilmeden ÖNCE gerçek bir kanal + zamanlanmış
+   Bluesky içeriği açıldı (test hesabıyla, `content_items.status=
+   'scheduled'`). Sonra `sm-publish` aktive edildi (21:42).
+
+**⭐ OTOMATİK YAYININ GERÇEK KANITI** — hiçbir elle tetikleme OLMADAN:
+
+```
+21:45:00  sm-publish turu  → jobs'a publish işi açtı (created_at 21:45:02)
+21:46:00  sm-worker turu   → işi aldı, handlePublish çalıştı, Bluesky'ye yazdı
+```
+
+```sql
+select id, status, external_post_id, published_at from content_items
+ where id='e1fa26a3-6485-414d-aa46-f3d003aee79d';
+
+ status    | external_post_id                                                        | published_at
+ published | at://did:plc:h4uy2bqzvjobgsyhzslvloys/app.bsky.feed.post/7dq3qqlzljuz2 | 2026-09-06 21:46:02.954+00
+```
+
+**Gönderi:** https://bsky.app/profile/did:plc:h4uy2bqzvjobgsyhzslvloys/post/7dq3qqlzljuz2
+
+`jobs` tablosunda karşılık gelen satır: `kind='publish', state='succeeded',
+attempts=1, last_error=null`. Bu, ürünün "otomatik paylaşım" vaadinin İLK
+gerçek kanıtı — kimse "yayınla"ya basmadı, zamanlayıcı vadesi geleni buldu,
+kuyruğa koydu, worker işledi, gerçek bir platformda gerçek bir gönderi
+oluştu.
+
+### C3 — İzleme + kill switch kanıtı
+
+20-30 dakikalık pencerede: `net._http_response`'ta **0 hata / 17 gerçek
+istek** (hepsi 200); `jobs` tablosunda yeni bir ölü mektup birikmedi (yalnızca
+aktivasyon öncesinden kalan 16 eski yetim iş + bu FAZ'ın kendi `publish`
+işi `succeeded`); hiçbir cron turu boşa dönmedi (`sm-publish`'in
+`scanned:0` turları BEKLENEN — o anda vadesi gelen başka içerik yoktu).
+
+**Kill switch kanıtı** — üçü de tek komutla ANINDA durduruldu:
+
+```sql
+do $$ ... perform cron.alter_job(r.jobid, active := false); ... $$;
+-- sonuç: sm-worker=f, sm-reaper=f, sm-publish=f (üçü de)
+```
+
+Doğrulandıktan sonra üçü (`sm-worker`, `sm-reaper`, `sm-publish`) FAZ C'nin
+kalıcı sonucu olarak yeniden aktive edildi; `sm-metrics`/`sm-token-refresh`
+kendi rotaları yazılmadığı için (adım 18/16-17b) hâlâ pasif —
+`docs/CRON_AKTIVASYON.md`'nin "rotası yazılmamış job pasif kalsın"
+kuralına uyularak.
+
+**Commit:** `cron aktivasyonu (17a-c)`.
+
+## FAZ D–E ve SON RAPOR
 
 Henüz başlanmadı.
