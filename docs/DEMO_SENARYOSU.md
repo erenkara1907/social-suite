@@ -1,17 +1,24 @@
 # Demo senaryosu — müşteri görüşmesi sunum planı
 
-BIRLESIM_PLANI §12 adım 11 FAZ D, **11b'de güncellendi (2026-09-05)**. Bu bir
-pazarlama metni değil, ekranda gezinirken TAKİP EDİLECEK bir yol haritası.
-Kanıtlar `docs/demo/TUTARLILIK.md`, `docs/ADIM_11b_RAPOR.md` ve o dosyaların
-referans aldığı ekran görüntülerinden (`docs/demo/live-*.png`, bu güncelleme
-sırasında canlı URL'den yeniden çekildi).
+BIRLESIM_PLANI §12 adım 11 FAZ D, **11b'de güncellendi (2026-09-05)**,
+**17a'da yeniden güncellendi (2026-09-07)**. Bu bir pazarlama metni değil,
+ekranda gezinirken TAKİP EDİLECEK bir yol haritası. Kanıtlar
+`docs/demo/TUTARLILIK.md`, `docs/ADIM_11b_RAPOR.md`, `docs/ADIM_17a_RAPOR.md`
+ve o dosyaların referans aldığı ekran görüntülerinden.
 
 **Neden bu güncelleme gerekti:** adım 11'de yazıldığında hiçbir şey canlı
 değildi — `/plan`, `/studio`, tekrar önleme, hepsi demo fixture'ıydı. Adım
 13-15 ve 19-20 arasında AI planlama, UGC boru hattı, medya köprüsü ve API
 anahtarı yönetimi GERÇEK oldu (müşterinin kendi anahtarıyla, canlı modda).
-Adım 11b üç yeni ekran ekledi. Aşağıdaki metin artık BUNU yansıtıyor —
-eski hâli "hiçbir şey gerçek değil" diyordu, bu artık doğru değil.
+Adım 11b üç yeni ekran ekledi. **Adım 17a "otomatik paylaşım" vaadini de
+gerçeğe çevirdi** — ama Instagram'ı DEĞİL: Instagram hâlâ Meta App Review
+bekliyor (adım 16/17b, postponed). 17a onay gerektirmeyen bir platformla
+(Bluesky, AT Protocol) hattın KENDİSİNİ kanıtladı — kanal bağlama, çifte
+yayın kilidi, cron aktivasyonu, gerçek bir otomatik yayın. ⚠ **Müşteriye
+net söylenmeli: Bluesky, Instagram'ın YERİNE GEÇMİYOR — hattın çalıştığının
+kanıtı. Müşteri Instagram bekliyor**, o adım 16/17b'de (Meta onayına bağlı)
+gelecek; o geldiğinde AYNI hat (`PublisherPort`, `publishing` kilidi, cron)
+ikinci bir adaptörle Instagram'ı da taşıyacak — sıfırdan yazılmayacak.
 
 ---
 
@@ -33,8 +40,8 @@ TUTTUĞUNU anlatır; müşteri önce "nasıl çalışıyor" sorusunun cevabını
 | 7 | `/studio` → çalışan iş | "Bu iş şu an gerçekten `running` — sahte ilerleme çubuğu yok, `media_jobs` tablosunun ham durumu." | Aynı içerik `/queue`'da da "Video üretiliyor (1/2)" olarak görünüyor — tek gerçek kaynak |
 | 8 | `/library` **(yeni, 11b)** | "Üretilen her görsel/video/ses burada — kalıcı depoda, yalnızca bu markaya ait." | Bir dosyayı silin — hem önizleme hem depolama nesnesi birlikte gider, yetim kalmaz |
 | 9 | `/queue` | "İnsan onayı burada. Otomasyon hiçbir şeyi habersiz yayınlamıyor." | Üstteki "Tekrar önleme" kartı — motor bir fikri parmak izi eşleşmesiyle engellemiş, gerekçesini gösteriyor |
-| 10 | `/queue` → yayınlanıyor satırı | "Çifte yayın kilidi — aynı gönderi iki kez atılamaz." | "Yayınlanıyor — kilitli" rozeti |
-| 11 | `/channels` **(yeni, 11b)** | "Kanal bağlama burada oturacak — bugün Instagram'ı gösteriyoruz ama henüz bağlayamıyoruz, dürüstçe söylüyoruz." | "Bağla" düğmesi görünür ama devre dışı: "Instagram bağlama yakında" — sahte bir OAuth akışı YOK |
+| 10 | `/queue` → yayınlanıyor satırı | "Çifte yayın kilidi — aynı gönderi iki kez atılamaz. Bluesky'de bu artık gerçek: iki eşzamanlı worker denesin, gönderi bir kez çıkıyor." | "Yayınlanıyor — kilitli" rozeti; yayınlanan bir Bluesky gönderisi kartta gerçek platform bağlantısı gösteriyor (**yeni, 17a**) |
+| 11 | `/channels` **(11b'de kabuk, 17a'da Bluesky gerçek)** | "Bluesky'ye şimdi gerçekten bağlanabiliyoruz — uygulama şifresi, onay/inceleme yok. Instagram hâlâ Meta'nın App Review'unu bekliyor, o kart dürüstçe devre dışı." | Bluesky kartında gerçek bir form (kullanıcı adı + uygulama şifresi) — sahte OAuth YOK, gerçek `createSession`; Instagram kartı hâlâ "Meta İş Hesabı gerekir" diyor, disabled |
 | 12 | `/analytics` | "Yayınlanan içerik geri dönüyor: erişim, etkileşim, en iyi saatler ısı haritası." | "final" / "d1" rozetleri — 30 günlük toplama bitmiş mi, hâlâ sürüyor mu, ikisi de plana geri besleniyor |
 | 13 | `/settings` | "Marka profili `/plan`'ın çıktısını doğrudan iyileştiriyor. Alttaki entegrasyon bölümünde kendi AI anahtarınızı giriyorsunuz — 'Test et' gerçek bir doğrulama çağrısı yapıyor." | Profil tamamlanma yüzdesi canlı güncelleniyor; anahtar girilince maskeli önizleme, ham anahtar EKRANA hiç yazılmıyor |
 
@@ -54,8 +61,8 @@ değil, ürünün gerçekten yapacağı şey."
 | Elle içerik yazma | `/composer` **(yeni, 11b)** | Form → gerçek `content_items` satırı → `/queue`'da görünür | ✅ **GERÇEK, her modda** — AI üretmiyor, taklit edecek bir şey yok |
 | UGC video | `/studio` | Persona → ses → video → dudak senkronu dört adımlı boru hattı | ✅ **GERÇEK** canlı modda (Kie/ElevenLabs/fal) — demo modda çıktı placeholder poster |
 | Medya kütüphanesi | `/library` **(yeni, 11b)** | Üretilen/yüklenen her dosya, marka izole, silinebilir | ✅ **GERÇEK, her modda** |
-| Otomatik paylaşım | `/queue` | Onaylanan içerik zamanlanmış saatte yayınlanıyor | ⚠ **Kısmen** — çifte yayın kilidi ve kuyruk gerçek; gerçek Instagram yayını adım 17 (postponed) |
-| Kanal bağlama | `/channels` **(yeni, 11b)** | Bağlı kanalların listesi, durum, son yenileme | ⚠ **Kabuk** — gerçek OAuth adım 16 (postponed, Meta onayı bekliyor) |
+| Otomatik paylaşım | `/queue` | Onaylanan içerik zamanlanmış saatte yayınlanıyor | ✅ **GERÇEK (Bluesky, adım 17a)** — cron (`sm-publish`+`sm-worker`) zamanı gelen içeriği ELLE tetiklenmeden yayınlıyor, kanıt `docs/ADIM_17a_RAPOR.md` FAZ C; ⚠ Instagram hâlâ postponed (adım 16/17b, Meta App Review) |
+| Kanal bağlama | `/channels` | Bağlı kanalların listesi, durum, son yenileme | ✅ **GERÇEK (Bluesky, adım 17a)** — uygulama şifresiyle, onay gerekmez; ⚠ Instagram hâlâ kabuk (OAuth adım 16, Meta onayı bekliyor) |
 | Tekrar önleme + devam zinciri | `/queue`, `/composer` | Fingerprint eşleşmesi engelliyor (composer'da uyarıyor); devam zinciri elle işaretlenebiliyor | ✅ **GERÇEK katman 1** (birebir); ⚠ katman 2 (anlamsal benzerlik) Voyage entegre edilmediği için kapalı |
 | API anahtarı yönetimi | `/settings` | Kaydet/sil/test et — Vault'ta saklanıyor | ✅ **GERÇEK, her modda** |
 | Geçmişe göre üretim | `/analytics` | "final"/"d1" rozetli metrikler, en iyi saatler ısı haritası | ⚠ **Demo veri** — okuma mantığı gerçek (D1 kararı), gerçek metrik toplama adım 18 (postponed) |
@@ -83,16 +90,17 @@ eder. **Adım 11'den beri değişenler kalın işaretli.**
   Eskiden React state'te yaşayıp sayfa değişince kaybolan bir kopukluktu;
   artık `activity` tablosuna yazılıyor ve `/studio`'nun "üretim sırası"
   bölümünde gerçekten görünüyor.
-- **Instagram'a (veya başka bir kanala) hâlâ bağlanılamaz — `/channels`
-  (11b) bunun KABUĞUNU kurdu, içini doldurmuyor.** Neden: Meta, bir
-  uygulamanın müşteri hesaplarına Instagram Graph API ile bağlanabilmesi
-  için **App Review** onayı istiyor; bu onay bu depodaki bir kod
-  değişikliğiyle değil, Meta'nın kendi süreciyle geliyor. MVP planı bu
-  aralıkta tek bir Meta uygulaması üzerinden **tester** eklemeyi öngörüyor
-  (~25 tester sınırı) — App Review paralelde ilerliyor. **Ne zaman:**
-  belirsiz, Meta'nın onay süresine bağlı; kod tarafı (`channel_credentials`
-  şeması, OAuth akışı) adım 16'da hazırlanacak, App Review çıktığında
-  devreye girecek.
+- **Instagram'a hâlâ bağlanılamaz — Bluesky'ye ARTIK bağlanılabiliyor
+  (adım 17a).** Neden Instagram farklı: Meta, bir uygulamanın müşteri
+  hesaplarına Instagram Graph API ile bağlanabilmesi için **App Review**
+  onayı istiyor; bu onay bu depodaki bir kod değişikliğiyle değil, Meta'nın
+  kendi süreciyle geliyor. MVP planı bu aralıkta tek bir Meta uygulaması
+  üzerinden **tester** eklemeyi öngörüyor (~25 tester sınırı) — App Review
+  paralelde ilerliyor. **Ne zaman:** belirsiz, Meta'nın onay süresine bağlı.
+  Bluesky'nin OAuth'u YOK (uygulama şifresi yeterli) — bu yüzden yayın
+  hattının KENDİSİ (kanal bağlama, `publishing` kilidi, cron) Instagram'ı
+  beklemeden, adım 17a'da kanıtlandı. Instagram App Review çıktığında adım
+  16/17b aynı hatta İKİNCİ bir `PublisherPort` adaptörü olarak eklenecek.
 - **`/settings`'in entegrasyon ve API anahtarı bölümü artık VAR (adım 13,
   20.5'te tamamlandı).** Müşteri kendi anahtarını girer, "Test et" gerçek
   bir doğrulama çağrısı yapar (en ucuz uç nokta — üretim başlatmaz).
@@ -109,9 +117,13 @@ eder. **Adım 11'den beri değişenler kalın işaretli.**
   kararı).** Otomasyon (plan üretici) 7-30 satırı toplu ürettiği için
   "reddet" doğru; tek satır elle yazan bir insan bilinçli tekrar isteyebilir
   (mevsimlik hatırlatma, varyasyon) — kaydı geçirir, yalnızca uyarır.
-- **Otomatik paylaşım hâlâ gerçek yayın yapmıyor (adım 17, postponed).**
-  Çifte yayın kilidi ve onay kuyruğu gerçek; Instagram'a GERÇEKTEN
-  basma adım 16'nın (bağlama) ardından gelecek.
+- **Otomatik paylaşım Bluesky'de artık GERÇEK (adım 17a) — Instagram'da
+  hâlâ postponed (adım 16/17b, Meta App Review bekliyor).** Çifte yayın
+  kilidi, kuyruk, cron (`sm-worker`/`sm-reaper`/`sm-publish`) üçü de
+  üretimde aktif ve gerçek bir Bluesky hesabına GERÇEKTEN yayın yaptı —
+  hiçbir manuel tetikleme olmadan (kanıt: `docs/ADIM_17a_RAPOR.md` FAZ C).
+  Instagram'a GERÇEKTEN basma adım 16'nın (bağlama) ardından gelecek; hat
+  zaten hazır, yalnızca ikinci bir adaptör eklenecek.
 - **Gerçek metrik toplama hâlâ yok (adım 18, postponed).** `/analytics`'in
   okuma mantığı (final/d1 ayrımı, D1 kararı) gerçek ve test edilmiş;
   besleyeceği veri bugün demo fixture.
@@ -135,6 +147,17 @@ Meta'nın App Review onayını gerektiriyor — bu bizim kod hızımıza değil
 Meta'nın süreç takvimine bağlı. `/channels` ekranı bugün bu bekleyişin
 kabuğunu gösteriyor: hangi platformların desteklendiği, her biri için ne
 gerektiği açıkça yazılı, sahte bir "bağlandı" görüntüsü YOK.
+
+**"Bluesky'ye bağlanabiliyorsak Instagram'a neden bağlanamıyoruz?"**
+Bluesky'nin OAuth'u yok — bir kullanıcı adı + tek kullanımlık uygulama
+şifresiyle bağlanılıyor, hiçbir üçüncü tarafın onayı gerekmiyor. Instagram
+Graph API'ye bağlanmak Meta'nın kendi onay sürecini (App Review) istiyor;
+bu bizim kontrolümüzde değil. Bluesky'yi bilerek seçtik çünkü Instagram'ı
+TAKLİT ETMİYOR — yayın hattının kendisini (kanal bağlama, çifte yayın
+kilidi, otomatik zamanlanmış yayın, cron) Instagram'dan bağımsız GERÇEK
+bir platformla kanıtlıyor. Instagram bu ürünün müşteriye asıl vaadi ve
+gelecek — Bluesky onun YERİNE geçmiyor, hattın önceden çalıştığının
+kanıtı.
 
 **"Maliyeti ne?"**
 Paket fiyatı henüz netleşmedi (kendi ürünümüzün fiyatı). Ama üretim başına
@@ -196,9 +219,12 @@ uyarısı vardı — o kopukluk adım 20 FAZ C1'de kapatıldı, artık kalıcı.
   gittiğini canlı gösterme fırsatı, teknik bir izleyici için güven artırır.
 - [ ] Tarayıcı diline göre değil, `TR`/`EN` düğmesiyle dil kontrolü elde —
   hangi dilde sunulacağı önceden netleştirilsin.
-- [ ] Cron job'ları hâlâ pasif (`sm-worker/publish/metrics/token-refresh/
-  reaper`, 5/5 — bu güncellemede `psql` ile doğrulandı). Bu, sunumda hiçbir
-  arka plan işleminin kendiliğinden tetiklenmeyeceği anlamına gelir — canlı
-  bir üretim göstermek isterseniz `/api/cron/worker`'ı ELLE tetiklemeniz
-  gerekir (ve bu GERÇEK para harcar, yalnızca kendi anahtarınız + kontrollü
-  bir ortamda yapın).
+- [ ] ⚠ **Cron artık KISMEN AKTİF (adım 17a'dan beri)** —
+  `sm-worker`/`sm-reaper`/`sm-publish` ÜÇÜ de üretimde ÇALIŞIYOR
+  (`sm-metrics`/`sm-token-refresh` hâlâ pasif, kendi rotaları yok). Bu,
+  sunumda EL DEĞMEDEN çalışan gerçek bir otomasyon var demek: bağlı bir
+  Bluesky hesabına zamanlanmış bir gönderi bırakırsanız `sm-publish` +
+  `sm-worker` onu birkaç dakika içinde GERÇEKTEN yayınlar — kontrolsüz bir
+  demo ortamında bunu BEKLENMEDİK bir yayın olarak GÖRMEYİN, tasarım gereği.
+  Kill switch: `select cron.alter_job(jobid, active:=false) from cron.job
+  where jobname like 'sm-%';` — tek komutla hepsini anında durdurur.

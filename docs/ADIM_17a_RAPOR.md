@@ -554,6 +554,125 @@ dahil — `smoke.spec.ts` hâlâ sıfır yabancı ağ isteği kanıtlıyor).
 
 **Commit:** `/queue gerçek yayın (17a-d)`.
 
-## FAZ E ve SON RAPOR
+## FAZ E — Kapanış
 
-Henüz başlanmadı.
+**Beş kapı:**
+1. `npx tsc --noEmit` — temiz.
+2. `npx eslint .` — 0 hata (1 önceden var olan, 17a'dan bağımsız uyarı:
+   `lib/core/plan/skeleton.test.ts` `_opts`).
+3. `npx vitest run` — 553 geçti, 0 kırık (40 skip — gerçek kimlik bilgisi
+   olmadan gated canlı testler; canlı kimlik bilgisiyle 13/13 geçti, bu
+   raporun FAZ A2/B bölümlerinde çıktılarıyla).
+4. `npm run build` — başarılı, tüm rotalar (`/api/cron/publish` dahil)
+   üretiliyor.
+5. `npx playwright test --project=chromium` (canlı kimlik bilgisiyle) —
+   **15/15 geçti**, demo izolasyonu dahil (`smoke.spec.ts`: `/queue`/
+   `/channels`'ın yeni formlarıyla birlikte hâlâ sıfır yabancı ağ isteği).
+
+**Sır sızıntısı taraması:** `git diff ad51b41~1..HEAD` (17a'nın TÜM
+commit'leri) üzerinde bilinen sır desenleri (`sk-`, `Bearer <uzun-token>`,
+JWT benzeri) tarandı — tek eşleşme `lib/server/jobs/sanitize.ts`'in KENDİ
+regex literalleri (sır DEĞİL, sır YAKALAYAN desenler). `.env.local` hiçbir
+zaman git'e girmedi (`.gitignore`, doğrulandı); `.env.example`'a yalnızca
+BOŞ placeholder'lar eklendi.
+
+**Deploy:** `vercel --prod` — iki kez (FAZ C'nin öncesinde bir kez, FAZ
+D'nin kodu için bir kez daha) `https://app-gold-one-92.vercel.app`'a. İkinci
+deploy'dan sonra cron'un (o sırada zaten aktif) KESİNTİSİZ çalışmaya devam
+ettiği doğrulandı — `net._http_response`'ta deploy öncesi/sonrası 0 hata.
+
+**Dokuz ekran doğrulaması:** geçici bir Playwright betiğiyle (commit
+edilmedi, kanıt alındıktan sonra silindi) PRODUCTION'a karşı — dokuzu da
+gerçek bir oturumla ziyaret edildi, hepsi HTTP 200 + `<main>` render etti:
+`/dashboard`, `/plan`, `/queue`, `/studio`, `/library`, `/channels`,
+`/analytics`, `/composer`, `/settings`.
+
+**`docs/DEMO_SENARYOSU.md` güncellendi** — "otomatik paylaşım" artık
+Bluesky için GERÇEK (⚠ Instagram için hâlâ postponed, net yazıldı);
+`/channels`/`/queue` satırları, MVP tablosu, SSS ve cron aktivasyon durumu
+(5/5 pasif → 3/5 aktif) güncel duruma çekildi. ⚠ **Belgeye açıkça yazılan
+uyarı:** Bluesky Instagram'ın YERİNE geçmiyor — hattın kanıtı. Müşteri
+Instagram bekliyor, o adım 16/17b'de (Meta onayına bağlı) gelecek.
+
+**Commit:** bu SON RAPOR + varsa küçük düzeltmeler — `kapanış (17a-e)`.
+
+---
+
+# SON RAPOR — özet ve devir notları
+
+## Platform kararı + gerekçe
+Bluesky (AT Protocol) — §0.1'de detaylı: tek host, resmi belgeli sabit
+limitler (300 grapheme/3000 bayt metin, 4 görsel/2MB), OAuth'suz (uygulama
+şifresi), `accessJwt`/`refreshJwt` ikilisi Instagram'ın 60 günlük token
+yenilemesine mimari bir "kuru deneme" sağlıyor.
+
+## Port/adaptör ayrımının Instagram'ı nasıl karşılayacağı
+`PublisherPort.publish(contentItemId)` imzası SABİT kalıyor — sync/async
+farkı adaptörün gövdesinde gizleniyor (§B1). Instagram adaptörü (adım
+16/17b) `lib/server/publish/publish-item.ts`'in yanına
+`lib/core/providers/instagram.ts` + kendi `publishContentItemInstagram`
+(ya da aynı fonksiyona platform dallanması eklenerek) gelecek; `handlePublish`
+zaten `item.platform` bazlı dallanabilecek şekilde yazıldı
+(`if (item.platform !== "bluesky") throw PermanentJobError(...)` — bu
+satır kaldırılıp Instagram dalı eklenecek). `JOB_RETRY_POLICY.publish.
+expectedDurationMs`/worker'ın `PER_JOB_TIMEOUT_MS`'i Instagram'ın
+container→polling→publish süresine göre YENİDEN KALİBRE edilmeli.
+
+## Çifte yayın testinin çıktısı
+`publish-item.live.test.ts`, iki eşzamanlı `publishContentItem()` çağrısı:
+biri gerçek `PublishItemResult` (gönderi yayınlandı), diğeri `null` (kilit
+kaybedildi, hiçbir ağ çağrısı yapılmadan çıktı) — içerik TAM OLARAK bir kez
+`published`. Ayrıca production cron'da (FAZ C) gerçek bir otomatik yayın
+kanıtlandı: `https://bsky.app/profile/did:plc:h4uy2bqzvjobgsyhzslvloys/post/7dq3qqlzljuz2`.
+
+## Asılı kalma kararı + gerekçe
+`scheduled`'a döner (`failed`'e DEĞİL). Gerekçe: `putRecord` (createRecord
+DEĞİL) + deterministik `rkey` (`contentItemIdToRkey`, içerik id'sinden
+TID'e SHA-256 eşlemesi) + deterministik `createdAt` (`scheduled_at`) →
+her retry AYNI rkey'e AYNI içerikle yazar, çifte gönderi YAPISAL OLARAK
+imkânsız. `sweepStuckPublishing()` ile canlı kanıtlandı.
+
+## Cron aktivasyonunun her adımı + izleme sonuçları
+`docs/CRON_AKTIVASYON.md`'nin bildiği `NEXT_PUBLIC_APP_URL=localhost`
+sorunu düzeltildi (gerçek Vercel domaini), `CRON_SECRET` yerel/Vercel/
+Vault'ta eşitlendi, kod deploy edildi, `sm-worker → sm-reaper → sm-publish`
+sırayla aktive edildi, her birinden sonra `cron.job_run_details`/
+`net._http_response` izlendi (hepsi temiz), kill switch kanıtlandı (tek
+komutla üçü de anında durduruldu), sonra üçü kalıcı olarak aktif bırakıldı.
+
+## Otomatik yayının kanıtı
+Yukarıda — gerçek gönderi URL'i + `jobs`/`content_items` satırlarının
+zaman damgalı SQL kanıtı (FAZ C bölümü).
+
+## Varsayımlar + Meta hazır olduğunda 16/17b için bilinmesi gerekenler
+
+1. **`refreshJwt` 90 gün, `accessJwt` 2 saat** (ölçüldü, FAZ A2.1) —
+   Instagram'ın 60 günlük `access_token`'ıyla KARŞILAŞTIRILABİLİR bir
+   yenileme ritmi; `refreshBlueskySession()`'ın deseni (manuel yenileme,
+   yalnızca uzun-ömürlü token'ın kendisi süresi dolunca) Instagram'a
+   doğrudan taşınabilir.
+2. **`app.bsky.feed.post`'un rkey'i TID olmak ZORUNDA** — bu Instagram'a
+   özgü değil, yalnızca Bluesky'nin kendi kısıtı; Instagram'ın kendi
+   idempotency mekanizması (muhtemelen Graph API'nin kendi "container id"
+   akışı) AYRICA araştırılmalı, buradaki TID çözümü doğrudan uygulanmaz.
+3. **`content_items.channel_id` artık `/queue`'nun onay akışında
+   dolduruluyor** (FAZ D) — Instagram bağlandığında `approveAction`'ın
+   kanal-bulma mantığı DEĞİŞMEYECEK, yalnızca `channels` tablosunda bir
+   Instagram satırı daha görünecek.
+4. **`PLATFORM_PUBLISH_LIMITS`/`checkTextLimit`/`composePostText`
+   platform-parametrik zaten** (`lib/core/publishing.ts`) — Instagram'ın
+   2200 karakter caption sınırı + hashtag'lerin CAPTION İÇİNDE mi yoksa
+   İLK YORUMDA mı gideceği kararı (Bluesky'de böyle bir ayrım YOK) adım
+   16/17b'de eklenmeli.
+5. **Medya:** Bluesky yalnızca görsel destekliyor bugün (`PUBLISH_IMAGE_
+   PREFIX` kontrolü) — Instagram'ın video/reels/carousel/story `media_type`
+   değerleri (`00_schema.sql` zaten tanımlı) `handlePublish`'e yeni
+   dallanma noktaları olarak eklenmeli.
+6. **⚠ DOĞRULANMALI kalan tek madde:** Bluesky'nin `putRecord` idempotency
+   davranışı resmi lexicon'da AÇIKÇA belgelenmiyor (topluluk kaynağından
+   doğrulandı, §B2) — gerçek davranış canlı testle kanıtlandığı için
+   ürün kararı için yeterli, ama resmi bir spesifikasyon referansı
+   bulunursa rapora eklenmeli.
+7. **Cron zaten üretimde aktif** — Instagram adaptörü eklendiğinde YENİ
+   bir cron job AÇILMAYACAK, aynı `sm-publish`/`sm-worker`/`sm-reaper`
+   üçlüsü onu da taşıyacak.
