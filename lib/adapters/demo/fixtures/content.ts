@@ -63,6 +63,7 @@ const CHANNEL_OF = {
   linkedin: DEMO_CHANNEL_IDS.linkedin,
   tiktok: DEMO_CHANNEL_IDS.tiktok,
   youtube: DEMO_CHANNEL_IDS.youtube,
+  bluesky: DEMO_CHANNEL_IDS.bluesky,
 } as const;
 
 function row(over: Partial<ContentItemRow> & Pick<ContentItemRow, "id" | "platform" | "kind" | "title" | "status">): ContentItemRow {

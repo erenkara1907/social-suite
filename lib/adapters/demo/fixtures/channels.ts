@@ -9,10 +9,12 @@
  *
  * ⚠ Bu dosyada TİP TANIMI YOK.
  *
- * Beş platformun beşi de var (§1.2 / D8). `is_connected` yalnızca instagram'da
- * true: §12 adım 16'ya kadar gerçekten bağlanabilen tek platform o, ve
- * `PUBLISHABLE_PLATFORMS` de yalnızca onu sayıyor. Demonun "bağlı" rozeti
- * ürünün bugünkü gerçeğini anlatmalı.
+ * Altı platformun altısı da var (§1.2 / D8 / 17a FAZ 0.2). `is_connected`
+ * yalnızca instagram'da true — bu, demonun satış hikâyesi (adım 11
+ * KAPANIŞI'nda seçildi), `PUBLISHABLE_PLATFORMS`'un BUGÜNKÜ içeriğinden
+ * BAĞIMSIZ bir eksen. Gerçekten bağlanabilen/yayınlanabilen platform artık
+ * `bluesky` (§12 adım 17a) — demo bunu ayrıca bir "bağlı" satırla
+ * göstermiyor, çünkü demo modda zaten sıfır dış istek/bağlama var (§9).
  */
 import type { ChannelRow } from "@/lib/core/types";
 
@@ -22,6 +24,7 @@ export const DEMO_CHANNEL_IDS = {
   linkedin: "c0000000-0000-4000-8000-000000000003",
   tiktok: "c0000000-0000-4000-8000-000000000004",
   youtube: "c0000000-0000-4000-8000-000000000005",
+  bluesky: "c0000000-0000-4000-8000-000000000006",
 } as const;
 
 export const DEMO_CHANNELS: ChannelRow[] = [
@@ -74,6 +77,19 @@ export const DEMO_CHANNELS: ChannelRow[] = [
     followers: 940,
     growth: 6.2,
     engagement: 2.8,
+    is_connected: false,
+    last_synced_at: null,
+  },
+  {
+    // 17a FAZ 0.2 — gerçekten bağlanabilen/yayınlanabilen platform bu, ama
+    // demo modda GERÇEK bir bağlama olmadığı için (§9: sıfır dış istek)
+    // is_connected burada da false — diğer bağlı-olmayan kartlarla aynı.
+    id: DEMO_CHANNEL_IDS.bluesky,
+    platform: "bluesky",
+    handle: "@demlemekahve.bsky.social",
+    followers: 1_260,
+    growth: 3.4,
+    engagement: 4.1,
     is_connected: false,
     last_synced_at: null,
   },

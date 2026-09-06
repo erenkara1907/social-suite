@@ -1898,7 +1898,7 @@ Her adım tek oturumda bitecek büyüklükte. Çıktı ve "tamamlandı" kriteri 
 | **14** | **LIVE #1 — Anthropic** (S4 önerisi) — `PlannerPort.live` + `CopyPort.live`, `/api/ai/plan` kuyruğa bağlanır | Gerçek plan üretimi | `MODE_PLANNER=live` ile gerçek plan `content_items`'a yazılır; diğer portlar demo kalır; sekme kapatılıp açıldığında iş devam eder |
 | **15** | **Tekrar önleme motoru** — fingerprint + embedding + Akış E | Tekrar kontrolü çalışıyor | Aynı tema iki kez planlanır; ikinci seferde `duplicate_blocked` aktiviteleri yazılır; bir "devam" içeriği `parent_id` ile oluşur |
 | **16** | **LIVE #2 — Instagram bağlama** — `ChannelPort.live`, OAuth connect/callback, `channel_credentials` | Kanal bağlanabiliyor | Gerçek IG hesabı bağlanır; token yazılır; **tarayıcıdan okunamadığı doğrulanır** |
-| **17** | **LIVE #3 — yayın** — `PublisherPort.live`, `sm-publish` + `publishing` kilidi + `sm-reaper` | Gerçek yayın | Zamanlanan bir gönderi otomatik yayınlanır; iki eşzamanlı cron çalışmasında **tek** yayın olur (test) |
+| **17** | **LIVE #3 — yayın** — `PublisherPort.live`, `sm-publish` + `publishing` kilidi + `sm-reaper`. **D10 ile 17a/17b'ye bölündü** (aşağıda) | Gerçek yayın | Zamanlanan bir gönderi otomatik yayınlanır; iki eşzamanlı cron çalışmasında **tek** yayın olur (test) |
 | **18** | **Metrik toplama + geri besleme** — §8.2 + §8.3 | Analitik dolu | `content_metrics` satırları birikir; `/analytics` boş değil; bir sonraki plan `insight_snapshot` ile üretilir |
 | **19** | **Medya köprüsü + storage** — `lib/server/storage.ts`, allowlist, `media_assets` | Kalıcı medya | fal/kie çıktısı Storage'a iner; `public_url` yayınlanabilir; **SSRF allowlist testi** yeşil |
 | **20** | **LIVE #4 — UGC boru hattı** — `VideoPort.live` + `VoicePort.live`, 5 adım kuyruğa bağlanır, SSRF düzeltmesi | Gerçek UGC videosu | Bir içerik seçilir, video üretilir, Storage'a iner, `needs_review`'a düşer; tarayıcı kapatılsa da iş biter |
@@ -1953,6 +1953,39 @@ uyarlamaların bir şeyi bozduğu ancak adım 8'de fark edilir.
 **Adım 4'ün kriterindeki grep neden önemli:** `lib/core/` içinde `process.env`
 çıkarsa, o dosya müşterinin anahtarını parametre olarak almıyor demektir —
 ürün tanımının "müşteri kendi anahtarını girer" maddesi orada kırılır.
+
+**17'ye ertelenenler ve neden 17a/17b'ye bölündüğü (D10):**
+
+Adım 17 iki bağımsız şey içeriyordu: genel **YAYIN HATTI** (platformdan
+bağımsız — `PublisherPort`, `publishing` kilidi, cron aktivasyonu, `/queue`
+gerçek yayın) ve **INSTAGRAM ADAPTÖRÜ** (Meta App Review'a bağlı, D9'un
+zaten belgelediği bağımlılık). D9 bu ikisini tek numaranın İÇİNDE tutup
+tamamının Meta'yı beklemesine sebep oluyordu — oysa hat, platformdan
+bağımsız olacak şekilde ZATEN tasarlanmıştı (§4a durum makinesi, Akış C,
+`PublisherPort`/`ChannelPort` arayüzleri hiçbir yerde "instagram" ismi
+geçirmiyor).
+
+| Alt adım | Kapsam | Bağımlılık |
+|---|---|---|
+| **17a** | Hat + bir onay gerektirmeyen platform (Bluesky — gerekçe `docs/ADIM_17a_RAPOR.md` §0.1) — kanal bağlama, `PublisherPort`/adaptör ayrımı, `publishing` kilidi + çifte yayın testi, cron aktivasyonu (ilk kez), `/queue` gerçek yayın | Yok — bugün başlanabilir |
+| **17b** | Instagram — kanıtlanmış hattın üstüne `PublisherPort` adaptörü | Meta App Review + tester kurulumu |
+
+**Neden bu bir kısayol değil:** 17a Instagram'ı ATLAMIYOR, hattın kendisini
+Instagram'dan ÖNCE, ondan BAĞIMSIZ bir platformla kanıtlıyor — tam olarak
+D9'un "gerçek OAuth akışıyla doğrulanana kadar bekle" ilkesiyle aynı
+disiplin, ama beklemeyi yalnızca Instagram'a ÖZGÜ kısma (16, 17b) daraltıyor.
+Çifte yayın kilidi, cron aktivasyonu ve `/queue`'nun gerçek yayın düğmeleri
+gibi ürünün en kritik güvenceleri artık Meta'nın takvimine bağlı değil.
+
+**Uygulama:** §12 tablosundaki satır 17 metni "D10 ile 17a/17b'ye bölündü"
+notuyla güncellendi; adım numarası SABİT kalma kuralını izleyerek (D9'un
+kendi kuralı) yeni alt adımlar `17a`/`17b` olarak eklendi, mevcut hiçbir
+numara kaymadı. `docs/CRON_AKTIVASYON.md`'nin "her job kendi hedef rotası
+yazıldığı adımda aktive edilsin" uyarısı 17a için de geçerli — bu adımda
+yalnızca `sm-worker`/`sm-reaper`/`sm-publish` aktive edilir, `sm-metrics`
+(adım 18) ve `sm-token-refresh`'in günlük süpürücü rotası pasif kalmaya
+devam eder (Bluesky'nin kendi token yenilemesi `publish` akışının İÇİNDE,
+`ensureFreshToken()` deseniyle yapılır — ayrı bir cron job değil).
 
 ---
 
@@ -2207,3 +2240,47 @@ bir not eklendi.
 **Bu revizyonun DEĞİŞTİRMEDİĞİ:** kritik yol metni (§12, "Kritik yol (D4
 ile daraltıldı)") — o metin adım 14'e kadarki sırayı anlatıyor, D9'un
 etkilediği aralığın (15 sonrası) DIŞINDA.
+
+### D10 — §12 adım 17 ikiye bölündü: 17a (hat + onay gerektirmeyen platform) / 17b (Instagram)
+
+**Sorun:** D9, 16/17'yi (Instagram bağlama/yayın) Meta App Review'un
+gerisine attı — doğru bir erteleme, ama adım 17'nin İÇİNDE iki farklı şey
+karışıktı: platformdan bağımsız YAYIN HATTI (§4a durum makinesi,
+`publishing` kilidi, cron aktivasyonu, `/queue`'nun gerçek düğmeleri) ve
+Instagram'a ÖZGÜ adaptör (Graph API, container→polling→publish). Birincisi
+Meta'yı beklemek ZORUNDA değildi; ikisini tek numarada tutmak, ürünün en
+kritik güvencelerini (çifte yayın koruması, otomatik yayının İLK gerçek
+kanıtı) gereksiz yere Meta'nın takvimine bağlıyordu.
+
+**Karar:** `docs/ADIM_17a_RAPOR.md`'de detaylandırıldığı gibi, adım 17
+`17a`/`17b`'ye bölündü:
+- **17a** — hat + Bluesky (AT Protocol, uygulama şifresi, onay/inceleme
+  gerektirmez). `PublisherPort`/adaptör ayrımı, kanal bağlama, `publishing`
+  kilidi + çifte yayın testi, cron'un İLK aktivasyonu (`sm-worker`,
+  `sm-reaper`, `sm-publish`), `/queue` gerçek yayın.
+- **17b** — Instagram, Meta hazır olduğunda, kanıtlanmış hattın üstüne
+  ikinci bir `PublisherPort` adaptörü olarak eklenir.
+
+**Şema etkisi:** `platform` CHECK listesi (`channels`, `content_items`)
+altıncı değer olarak `bluesky` aldı (idempotent `alter table ... drop/add
+constraint`, `00_schema.sql`'in kendi §1.2 desenini izleyerek — bkz.
+`jobs_kind_check`/`provider_credentials_provider_check` emsali).
+`PUBLISHABLE_PLATFORMS` (`lib/core/publishing.ts`) `["instagram"]` →
+`["bluesky"]` oldu; Instagram'ın `/channels` ekranındaki dürüst "OAuth
+yakında" ipucu bu listeden KOPARILDI (platforma göre sabit hâle getirildi,
+`components/app/channels-view.tsx`) — yoksa Bluesky listeye girince
+Instagram'ın ipucu kaybolur, Bluesky de yanlışlıkla Instagram'a özgü metni
+gösterirdi.
+
+**Gerekçe — neden bu bir kısayol değil:** D9'un ilkesi ("gerçek bir OAuth
+akışıyla doğrulanana kadar beklemek, kısayolla işaretlememek") korunuyor;
+17a Instagram'ı taklit ETMİYOR, hattı Instagram'dan bağımsız gerçek bir
+platformla (gerçek hesap, gerçek yayın, gerçek cron) kanıtlıyor. `Port`/
+adaptör ayrımı zaten §9.1'in ilkesiydi — bu revizyon onu daha erken,
+Meta'ya bağlı olmadan sınamayı mümkün kılıyor.
+
+**Bu revizyonun DEĞİŞTİRMEDİĞİ:** §8.8 (Instagram dışı platformlar için
+FAZ 2 sonu kararı) — Bluesky orada tarif edilen "X/LinkedIn/TikTok'u en
+sona koy" kararını GENİŞLETMİYOR, çünkü Bluesky zaten `PLATFORMS`
+listesinde yeni bir üye olarak ekleniyor, §8.8'in kapsamındaki üç platform
+(X/LinkedIn/TikTok) hâlâ FAZ 2'nin sonunda.

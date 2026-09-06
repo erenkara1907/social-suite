@@ -278,7 +278,6 @@ export const ui = {
     channelsLastSynced: "Son yenileme",
     channelsNeverSynced: "Hiç yenilenmedi",
     channelsConnectCta: "Bağla",
-    channelsConnectDisabledHint: "Instagram bağlama yakında.",
     // ── 11b FAZ B: /library ─────────────────────────────────────────────
     libraryTitle: "Kütüphane",
     libraryHint: "Üretilen ve yüklenen tüm medya — yalnızca bu markaya ait.",
@@ -574,7 +573,6 @@ export const ui = {
     channelsLastSynced: "Last synced",
     channelsNeverSynced: "Never synced",
     channelsConnectCta: "Connect",
-    channelsConnectDisabledHint: "Instagram connecting coming soon.",
     // ── 11b FAZ B: /library ─────────────────────────────────────────────
     libraryTitle: "Library",
     libraryHint: "Every generated and uploaded media file — this brand's only.",

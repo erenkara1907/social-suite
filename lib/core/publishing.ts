@@ -10,7 +10,17 @@
  */
 import type { Platform } from "@/lib/core/types";
 
-export const PUBLISHABLE_PLATFORMS: Platform[] = ["instagram"];
+/**
+ * ⭐ 17a FAZ 0/B — `instagram` → `bluesky`. §12 adım 17a: yayın hattının
+ * KENDİSİ (bu dosya dahil) onay gerektirmeyen bir platformla kanıtlanıyor;
+ * Instagram Meta App Review beklerken (`docs/ADIM_17a_RAPOR.md` §0.1).
+ * Instagram bu listede DEĞİL demek "yayınlanamaz" demek — `/channels`'ın
+ * kendi "yakında OAuth" ipucu ayrı bir sabitle korunuyor
+ * (`components/app/channels-view.tsx`), bu listeye bağlı değil.
+ * Adım 16/17b Instagram'ı PublisherPort'a ikinci adaptör olarak eklerken
+ * bu diziye geri döner.
+ */
+export const PUBLISHABLE_PLATFORMS: Platform[] = ["bluesky"];
 
 export function canPublish(platform: Platform): boolean {
   return PUBLISHABLE_PLATFORMS.includes(platform);

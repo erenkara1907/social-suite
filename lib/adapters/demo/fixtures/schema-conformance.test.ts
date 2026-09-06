@@ -58,8 +58,8 @@ function expectUnionMatchesSchema(
 }
 
 describe("1. TS union'ları ⇄ şema CHECK listeleri", () => {
-  it("content_items.platform (5 değer)", () => {
-    expect(expectUnionMatchesSchema("content_items", "platform", PLATFORMS)).toHaveLength(5);
+  it("content_items.platform (6 değer — 17a FAZ 0.2: bluesky eklendi)", () => {
+    expect(expectUnionMatchesSchema("content_items", "platform", PLATFORMS)).toHaveLength(6);
   });
   it("channels.platform — content_items ile AYNI liste", () => {
     expect(checkValues("channels", "platform")).toEqual(checkValues("content_items", "platform"));

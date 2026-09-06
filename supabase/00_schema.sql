@@ -473,7 +473,7 @@ create table if not exists public.channels (
   brand_id            uuid not null references public.brands on delete cascade,
   user_id             uuid not null references auth.users on delete cascade,
   platform            text not null check (platform in
-                        ('instagram', 'x', 'linkedin', 'tiktok', 'youtube')),
+                        ('instagram', 'x', 'linkedin', 'tiktok', 'youtube', 'bluesky')),
   handle              text not null,
   external_account_id text,                       -- Instagram user id
   username            text,
@@ -487,6 +487,17 @@ create table if not exists public.channels (
 );
 
 create index if not exists channels_brand_idx on public.channels (brand_id);
+
+-- ⭐ 17a FAZ 0.2 — 'bluesky' eklendi (§12 adım 17a: onay gerektirmeyen
+-- platform üzerinden yayın hattı kanıtı). Idempotent yakınsama — mevcut
+-- kurulumlar bu blokla, sıfırdan kurulumlar yukarıdaki inline CHECK'le
+-- doğru listeye ulaşır (§1.2'nin "text + CHECK" kararı, ADIM_13'ün
+-- provider_credentials_provider_check'iyle aynı desen).
+alter table public.channels
+  drop constraint if exists channels_platform_check;
+alter table public.channels
+  add constraint channels_platform_check check (platform in
+    ('instagram', 'x', 'linkedin', 'tiktok', 'youtube', 'bluesky'));
 
 /* ── channel_credentials — siraya/003-instagram.sql:15-25 (birebir) ───────── */
 create table if not exists public.channel_credentials (
@@ -623,7 +634,7 @@ create table if not exists public.content_items (
 
   /* ── ne, nerede, ne zaman ─────────────────────────────────────────────── */
   platform     text not null check (platform in
-                 ('instagram', 'x', 'linkedin', 'tiktok', 'youtube')),
+                 ('instagram', 'x', 'linkedin', 'tiktok', 'youtube', 'bluesky')),
   -- DİKKAT: threadly 'X' | 'LinkedIn' | 'Instagram' (PascalCase) kullanıyordu.
   -- Burada küçük harf kanonik; görünen etiketler TS tarafında (channelMeta).
   kind         text not null default 'text' check (kind in
@@ -725,6 +736,13 @@ create index if not exists content_fingerprint_idx
 create index if not exists content_embedding_idx
   on public.content_items using hnsw (embedding vector_cosine_ops)
   where embedding is not null;
+
+-- ⭐ 17a FAZ 0.2 — channels_platform_check ile aynı gerekçe/desen.
+alter table public.content_items
+  drop constraint if exists content_items_platform_check;
+alter table public.content_items
+  add constraint content_items_platform_check check (platform in
+    ('instagram', 'x', 'linkedin', 'tiktok', 'youtube', 'bluesky'));
 
 drop trigger if exists content_items_touch on public.content_items;
 create trigger content_items_touch before update on public.content_items

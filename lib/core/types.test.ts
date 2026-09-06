@@ -30,8 +30,8 @@ describe("normalizePlatform", () => {
 });
 
 describe("enum listeleri şemayla hizalı", () => {
-  it("beş platform", () => {
-    expect([...PLATFORMS]).toEqual(["instagram", "x", "linkedin", "tiktok", "youtube"]);
+  it("altı platform (17a FAZ 0.2: bluesky eklendi)", () => {
+    expect([...PLATFORMS]).toEqual(["instagram", "x", "linkedin", "tiktok", "youtube", "bluesky"]);
   });
 
   it("sekiz içerik durumu (§4a)", () => {

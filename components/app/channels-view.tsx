@@ -14,16 +14,28 @@ export interface ChannelCardView {
   account: ChannelAccount | null;
 }
 
-/** Instagram §12 adım 16'da OAuth alacak — diğer dördü için henüz bir
- *  yayıncı implementasyonu planlanmadı (§8.8: yalnızca x/linkedin/tiktok
- *  adı geçiyor, "FAZ 2'nin en sonu"; youtube o listede bile yok). İkisini
- *  ayıran tek şey PUBLISHABLE_PLATFORMS'un bugünkü içeriği — ileride
- *  genişlerse bu kart otomatik doğru mesajı gösterir. */
-function requirementText(platform: Platform, willConnectSoon: boolean): { tr: string; en: string } {
-  if (willConnectSoon) {
+/**
+ * ⭐ 17a FAZ 0.2 — bu iki eksen artık AYRI: "bugün gerçekten yayınlanabilir"
+ * (`PUBLISHABLE_PLATFORMS`, bugün `bluesky`) ile "yol haritasında OAuth'u
+ * planlı olan" (yalnızca `instagram`, §12 adım 16/17b — Meta App Review
+ * bekliyor) farklı sorular. Önceki hâli ikisini `PUBLISHABLE_PLATFORMS`'un
+ * TEK içeriğine bağlıyordu; Bluesky o listeye girince Instagram'ın dürüst
+ * "yakında OAuth" ipucu kaybolur, bluesky kartı da yanlışlıkla Instagram'a
+ * özgü metni gösterirdi. Instagram'ın ipucu bu yüzden platforma göre
+ * (sabit), publishable olup olmama sorusundan BAĞIMSIZ kararlaştırılıyor.
+ */
+function requirementText(platform: Platform, isPublishable: boolean): { tr: string; en: string } {
+  if (platform === "instagram") {
     return {
       tr: "Meta İş Hesabı + Instagram Profesyonel hesabı gerekir. Bağlama OAuth akışıyla olacak — henüz devrede değil.",
       en: "Requires a Meta Business account + an Instagram Professional account. Connecting will use an OAuth flow — not live yet.",
+    };
+  }
+  if (isPublishable) {
+    // Bugün yalnızca bluesky — bağlama akışı §12 adım 17a FAZ A'nın işi.
+    return {
+      tr: "Uygulama şifresiyle bağlanır, onay/inceleme gerekmez. Bağlama akışı hazırlanıyor.",
+      en: "Connects with an app password, no approval/review needed. Connect flow is being wired up.",
     };
   }
   return {
@@ -35,7 +47,7 @@ function requirementText(platform: Platform, willConnectSoon: boolean): { tr: st
 function ChannelCard({ card }: { card: ChannelCardView }) {
   const { ui, lang } = useLang();
   const meta = PLATFORM_META[card.platform];
-  const willConnectSoon = (PUBLISHABLE_PLATFORMS as readonly Platform[]).includes(card.platform);
+  const isPublishable = (PUBLISHABLE_PLATFORMS as readonly Platform[]).includes(card.platform);
   const connected = card.account?.connected ?? false;
 
   return (
@@ -81,7 +93,7 @@ function ChannelCard({ card }: { card: ChannelCardView }) {
             </p>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">{requirementText(card.platform, willConnectSoon)[lang]}</p>
+          <p className="text-sm text-muted-foreground">{requirementText(card.platform, isPublishable)[lang]}</p>
         )}
       </CardContent>
 
@@ -92,7 +104,7 @@ function ChannelCard({ card }: { card: ChannelCardView }) {
             variant="outline"
             size="sm"
             disabled
-            title={willConnectSoon ? ui.channelsConnectDisabledHint : requirementText(card.platform, false)[lang]}
+            title={requirementText(card.platform, isPublishable)[lang]}
             className="w-full gap-1.5"
           >
             <Icon name="link-2" className="h-3.5 w-3.5" />

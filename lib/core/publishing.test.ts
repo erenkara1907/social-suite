@@ -3,14 +3,15 @@ import { AUTOMATED_STATUSES, PUBLISHABLE_PLATFORMS, canPublish } from "@/lib/cor
 import { PLATFORMS, POST_STATUSES, type Platform } from "@/lib/core/types";
 
 describe("canPublish", () => {
-  it("bugün yalnızca Instagram'a yayınlar", () => {
-    expect(canPublish("instagram")).toBe(true);
+  it("bugün yalnızca Bluesky'a yayınlar (17a — onay gerektirmeyen platform)", () => {
+    expect(canPublish("bluesky")).toBe(true);
   });
 
   it("⭐ diğer platformların hepsini reddeder — bunlar taslak kalır", () => {
-    // §8.8 gelene kadar bu dördü yayınlanamaz. Zamanlayıcının tutamayacağı
-    // bir sözü kuyruğa koymamak bilinçli bir karar.
-    for (const platform of ["x", "linkedin", "tiktok", "youtube"] as const) {
+    // Instagram dahil: hat kanıtlanana kadar (17a) yayıncısı yok; Meta App
+    // Review sonrası (16/17b) PublisherPort'a ikinci adaptör olarak eklenecek.
+    // Zamanlayıcının tutamayacağı bir sözü kuyruğa koymamak bilinçli bir karar.
+    for (const platform of ["instagram", "x", "linkedin", "tiktok", "youtube"] as const) {
       expect(canPublish(platform)).toBe(false);
     }
   });

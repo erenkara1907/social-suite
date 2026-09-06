@@ -5,9 +5,11 @@
  * kriteri tam olarak bu: "hiçbir dış servis çağrılmaz".
  *
  * ⭐ `supported()` GERÇEĞİ söylüyor: `PUBLISHABLE_PLATFORMS`, yani bugün
- * yalnızca `instagram`. Demoda beş platformu da "yayınlanabilir" göstermek,
- * satış görüşmesinde tutulamayacak bir söz olurdu. §8.8 listeyi genişletince
- * demo da kendiliğinden genişler.
+ * yalnızca `bluesky` (17a — Instagram Meta App Review beklerken onay
+ * gerektirmeyen bir platformla kanıtlandı). Demoda altı platformu da
+ * "yayınlanabilir" göstermek, satış görüşmesinde tutulamayacak bir söz
+ * olurdu. §8.8/adım 16-17b listeyi genişletince demo da kendiliğinden
+ * genişler.
  */
 import type { PublisherPort } from "@/lib/adapters/ports";
 import { PUBLISHABLE_PLATFORMS } from "@/lib/core/publishing";

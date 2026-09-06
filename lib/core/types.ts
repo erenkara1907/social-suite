@@ -39,7 +39,12 @@ export const CONTENT_LANGUAGE_LABEL: Record<Lang, L> = {
  * o değerler görünen etiketti, kanonik anahtar değil. Etiket artık
  * `PLATFORM_META`'da yaşıyor.
  */
-export const PLATFORMS = ["instagram", "x", "linkedin", "tiktok", "youtube"] as const;
+/**
+ * ⭐ 17a FAZ 0.2 — `bluesky` eklendi. §12 adım 17a: onay gerektirmeyen bir
+ * platformla yayın hattının (§4a durum makinesi, Akış C) kanıtlanması —
+ * Instagram (17b) Meta App Review beklerken. Gerekçe: `docs/ADIM_17a_RAPOR.md`.
+ */
+export const PLATFORMS = ["instagram", "x", "linkedin", "tiktok", "youtube", "bluesky"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 /**
@@ -56,6 +61,8 @@ export const PLATFORM_META: Record<Platform, { name: string; icon: string; hue: 
   linkedin: { name: "LinkedIn", icon: "briefcase", hue: "245", short: "in" },
   tiktok: { name: "TikTok", icon: "music-2", hue: "190", short: "tt" },
   youtube: { name: "YouTube", icon: "play", hue: "0", short: "yt" },
+  // 17a FAZ 0.2 — gerçek yayıncısı olan ilk platform (bkz. lib/core/publishing.ts).
+  bluesky: { name: "Bluesky", icon: "cloud", hue: "210", short: "bsky" },
 };
 
 /**

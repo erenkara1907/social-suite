@@ -40,13 +40,14 @@ describe("⭐ 12 portun demo implementasyonu ÇAĞRILABİLİYOR", () => {
     expect((await port("voice").list()).length).toBeGreaterThan(0);
   });
   it("publisher.supported()", () => {
-    expect(port("publisher").supported()).toContain("instagram");
+    // 17a FAZ 0/B — Instagram Meta App Review beklerken bluesky ile kanıtlandı.
+    expect(port("publisher").supported()).toContain("bluesky");
   });
   it("metrics.list()", async () => {
     expect((await port("metrics").list(60)).length).toBeGreaterThan(0);
   });
   it("channel.list()", async () => {
-    expect((await port("channel").list()).length).toBe(5);
+    expect((await port("channel").list()).length).toBe(6);
   });
   it("brand.get()", async () => {
     expect((await port("brand").get())?.name).toBeTruthy();
