@@ -1,10 +1,20 @@
 # Demo senaryosu — müşteri görüşmesi sunum planı
 
 BIRLESIM_PLANI §12 adım 11 FAZ D, **11b'de güncellendi (2026-09-05)**,
-**17a'da yeniden güncellendi (2026-09-07)**. Bu bir pazarlama metni değil,
+**17a'da yeniden güncellendi (2026-09-07)**, **adım 18'de yeniden
+güncellendi (2026-09-07, aynı gün)**. Bu bir pazarlama metni değil,
 ekranda gezinirken TAKİP EDİLECEK bir yol haritası. Kanıtlar
-`docs/demo/TUTARLILIK.md`, `docs/ADIM_11b_RAPOR.md`, `docs/ADIM_17a_RAPOR.md`
-ve o dosyaların referans aldığı ekran görüntülerinden.
+`docs/demo/TUTARLILIK.md`, `docs/ADIM_11b_RAPOR.md`, `docs/ADIM_17a_RAPOR.md`,
+`docs/ADIM_18_RAPOR.md` ve o dosyaların referans aldığı ekran
+görüntülerinden.
+
+**Adım 18'de değişen:** MVP'nin BEŞİNCİ vaadi ("geçmişe göre üretim")
+artık GERÇEK — Bluesky'nin gerçek metrikleri toplanıyor
+(`docs/ADIM_18_RAPOR.md`), `/analytics` demo veri değil gerçek veri
+gösteriyor, ve bir sonraki plan üretimi bu ölçümlerden çıkarılan bir
+YAKLAŞIM sinyaliyle besleniyor (`/plan`'daki "Sonraki plan şunları
+öğrendi" kartı). ⚠ Tekrar önlemenin Katman 2'si (anlamsal benzerlik,
+embedding) HÂLÂ KAPALI — bu adım onu AÇMADI, değişmedi.
 
 **Neden bu güncelleme gerekti:** adım 11'de yazıldığında hiçbir şey canlı
 değildi — `/plan`, `/studio`, tekrar önleme, hepsi demo fixture'ıydı. Adım
@@ -42,7 +52,7 @@ TUTTUĞUNU anlatır; müşteri önce "nasıl çalışıyor" sorusunun cevabını
 | 9 | `/queue` | "İnsan onayı burada. Otomasyon hiçbir şeyi habersiz yayınlamıyor." | Üstteki "Tekrar önleme" kartı — motor bir fikri parmak izi eşleşmesiyle engellemiş, gerekçesini gösteriyor |
 | 10 | `/queue` → yayınlanıyor satırı | "Çifte yayın kilidi — aynı gönderi iki kez atılamaz. Bluesky'de bu artık gerçek: iki eşzamanlı worker denesin, gönderi bir kez çıkıyor." | "Yayınlanıyor — kilitli" rozeti; yayınlanan bir Bluesky gönderisi kartta gerçek platform bağlantısı gösteriyor (**yeni, 17a**) |
 | 11 | `/channels` **(11b'de kabuk, 17a'da Bluesky gerçek)** | "Bluesky'ye şimdi gerçekten bağlanabiliyoruz — uygulama şifresi, onay/inceleme yok. Instagram hâlâ Meta'nın App Review'unu bekliyor, o kart dürüstçe devre dışı." | Bluesky kartında gerçek bir form (kullanıcı adı + uygulama şifresi) — sahte OAuth YOK, gerçek `createSession`; Instagram kartı hâlâ "Meta İş Hesabı gerekir" diyor, disabled |
-| 12 | `/analytics` | "Yayınlanan içerik geri dönüyor: erişim, etkileşim, en iyi saatler ısı haritası." | "final" / "d1" rozetleri — 30 günlük toplama bitmiş mi, hâlâ sürüyor mu, ikisi de plana geri besleniyor |
+| 12 | `/analytics` | "Yayınlanan içerik geri dönüyor: etkileşim, en iyi saatler ısı haritası — Bluesky'de bu artık GERÇEK ölçüm (adım 18)." | "final" / "d1" rozetleri — 30 günlük toplama bitmiş mi, hâlâ sürüyor mu; erişim kartı Bluesky için dürüstçe "—" gösteriyor ("bu platform erişim vermiyor" — 0 DEĞİL) |
 | 13 | `/settings` | "Marka profili `/plan`'ın çıktısını doğrudan iyileştiriyor. Alttaki entegrasyon bölümünde kendi AI anahtarınızı giriyorsunuz — 'Test et' gerçek bir doğrulama çağrısı yapıyor." | Profil tamamlanma yüzdesi canlı güncelleniyor; anahtar girilince maskeli önizleme, ham anahtar EKRANA hiç yazılmıyor |
 
 **Kapanış cümlesi önerisi:** "Az önce gezdiğiniz on üç ekran tek bir demo
@@ -65,7 +75,7 @@ değil, ürünün gerçekten yapacağı şey."
 | Kanal bağlama | `/channels` | Bağlı kanalların listesi, durum, son yenileme | ✅ **GERÇEK (Bluesky, adım 17a)** — uygulama şifresiyle, onay gerekmez; ⚠ Instagram hâlâ kabuk (OAuth adım 16, Meta onayı bekliyor) |
 | Tekrar önleme + devam zinciri | `/queue`, `/composer` | Fingerprint eşleşmesi engelliyor (composer'da uyarıyor); devam zinciri elle işaretlenebiliyor | ✅ **GERÇEK katman 1** (birebir); ⚠ katman 2 (anlamsal benzerlik) Voyage entegre edilmediği için kapalı |
 | API anahtarı yönetimi | `/settings` | Kaydet/sil/test et — Vault'ta saklanıyor | ✅ **GERÇEK, her modda** |
-| Geçmişe göre üretim | `/analytics` | "final"/"d1" rozetli metrikler, en iyi saatler ısı haritası | ⚠ **Demo veri** — okuma mantığı gerçek (D1 kararı), gerçek metrik toplama adım 18 (postponed) |
+| Geçmişe göre üretim | `/analytics`, `/plan` | "final"/"d1" rozetli metrikler, en iyi saatler ısı haritası; sonraki plan geri besleme kullanıyor | ✅ **GERÇEK (adım 18)** — Bluesky metrikleri gerçekten toplanıyor (`sm-metrics` cron), `/plan`'ın "Sonraki plan şunları öğrendi" kartı gerçek bir sinyal gösteriyor (yeterli veri varsa); ⚠ erişim yalnızca Instagram (postponed) geldiğinde dolacak — Bluesky reach vermiyor |
 
 ---
 
@@ -124,9 +134,18 @@ eder. **Adım 11'den beri değişenler kalın işaretli.**
   hiçbir manuel tetikleme olmadan (kanıt: `docs/ADIM_17a_RAPOR.md` FAZ C).
   Instagram'a GERÇEKTEN basma adım 16'nın (bağlama) ardından gelecek; hat
   zaten hazır, yalnızca ikinci bir adaptör eklenecek.
-- **Gerçek metrik toplama hâlâ yok (adım 18, postponed).** `/analytics`'in
-  okuma mantığı (final/d1 ayrımı, D1 kararı) gerçek ve test edilmiş;
-  besleyeceği veri bugün demo fixture.
+- **Gerçek metrik toplama artık VAR (adım 18).** `sm-metrics` cron'u
+  Bluesky'nin gerçek gönderi metriklerini (beğeni/yanıt/repost) topluyor;
+  `/analytics` demo fixture DEĞİL, gerçek `content_metrics` satırlarını
+  gösteriyor. ⚠ Bluesky **erişim/gösterim VERMİYOR** — `/analytics`'in
+  erişim kartı bunu "0" değil dürüstçe "—" ile gösteriyor; erişim
+  Instagram (postponed) geldiğinde gerçek bir sayı olacak. Geri besleme
+  de gerçek: son yayınlanan içeriklerin ölçümünden çıkarılan bir YAKLAŞIM
+  sinyali (kısa/soru soran açılışlar, baskın format/saat) `/plan`'ın
+  bir sonraki üretimine giriyor — ama KONU asla taşınmıyor, tekrar
+  önleme motoruyla çakışmasın diye. Yeterli veri (bugün için ⚠ kalibre
+  edilmemiş bir eşik: en az 5 ölçülmüş içerik) yoksa sinyal üretilmez,
+  `/plan` bunu dürüstçe gösterir.
 - **Fiyatlandırma henüz yok.** `/studio`'daki kredi tablosu bizim vendor
   maliyetimiz (aşağıdaki §4'e bakın) — müşteriye yansıyacak paket fiyatı
   henüz belirlenmedi.
