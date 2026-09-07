@@ -189,6 +189,14 @@ export const ACTIVITY_ACTION_ICON: Record<ActivityAction, string> = {
 export const METRIC_TIERS = ["h6", "d1", "final"] as const;
 export type MetricTier = (typeof METRIC_TIERS)[number];
 
+/**
+ * ⭐ adım 18 Düzeltme 1 — `engagement_rate`'in TABANI. `supabase/00_schema.sql`
+ * `content_metrics.engagement_rate_basis`'in TS karşılığı. Farklı tabanlı
+ * oranlar KARŞILAŞTIRILAMAZ/ORTALAMASI ALINAMAZ/AYNI SIRALAMAYA GİRMEZ —
+ * kural burada tip olarak taşınır, UYGULANMASI `lib/core/metrics/basis.ts`'te. */
+export const ENGAGEMENT_RATE_BASES = ["reach", "followers", "unavailable"] as const;
+export type EngagementRateBasis = (typeof ENGAGEMENT_RATE_BASES)[number];
+
 /* ── Satırlar — Supabase'den geldikleri hâl ──────────────────────────────── */
 
 export interface ContentItemRow {
@@ -369,6 +377,14 @@ export interface MetricRow {
   comments: number;
   shares: number;
   engagement_rate: number;
+  /** ⭐ adım 18 Düzeltme 1 — ZORUNLU (opsiyonel değil): `engagement_rate`'i
+   *  okuyan/karşılaştıran/ortalayan HER yer bu alanı da taşımak zorunda
+   *  kalsın diye. `lib/core/metrics/basis.ts`'in `groupByEngagementBasis()`'i
+   *  olmadan `engagement_rate`'i doğrudan toplamak/sıralamak bilinçli bir
+   *  hata sayılır — derleyici bunu YAKALAMAZ (tip yalnızca alanın VARLIĞINI
+   *  zorunlu kılıyor, kullanım disiplinini değil), o yüzden `basis.ts`'in
+   *  fonksiyonları ve testleri bu kuralın GERÇEK uygulama noktası. */
+  engagement_rate_basis: EngagementRateBasis;
   tier: MetricTier;
   collected_at: string;
 }

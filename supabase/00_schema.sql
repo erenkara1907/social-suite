@@ -478,8 +478,14 @@ create table if not exists public.channels (
   external_account_id text,                       -- Instagram user id
   username            text,
   followers           integer not null default 0,
-  growth              numeric(6,2) not null default 0,   -- % / 30 gün
-  engagement          numeric(6,2) not null default 0,   -- ortalama %
+  -- ⚠ adım 18 Düzeltme 2 — önceki yorum "% / 30 gün" diyordu, YANLIŞ etiketti.
+  -- Gerçek 30 günlük büyüme için takipçi geçmişi (zaman serisi) tablosu
+  -- gerekir — bu adımın kapsamı DEĞİL (BIRLESIM_PLANI §14'e açık madde
+  -- olarak eklendi). Kod DOĞRU ölçüyor: bu, SON SENKRONDAN bu yana takipçi
+  -- değişim yüzdesi (`sm-metrics` saatte bir çalıştığı için pratikte
+  -- "~son 1 saatteki değişim" — 30 günlük bir trend DEĞİL).
+  growth              numeric(6,2) not null default 0,   -- % · son senkrondan bu yana değişim
+  engagement          numeric(6,2) not null default 0,   -- ortalama % (bkz. content_metrics.engagement_rate_basis — TABANI TEK DEĞİLSE bu ortalama yanıltıcı olur)
   is_connected        boolean not null default false,
   last_synced_at      timestamptz,                -- metrik toplayıcı doldurur
   created_at          timestamptz not null default now(),
@@ -1100,8 +1106,39 @@ create table if not exists public.content_metrics (
      ölçümü vardır ve okunabilir. Geri besleme (§8.3, Akış D) bu yüzden
      'final'e değil, içerik başına EN SON MEVCUT ölçüme bakar. */
   tier            text not null default 'h6' check (tier in ('h6', 'd1', 'final')),
+
+  /* ⭐ adım 18 Düzeltme 1 — `engagement_rate`'in TABANI birinci sınıf bir
+     kolon, `raw` JSON'una gömülü DEĞİL. Gerekçe: sıralama/ortalama alan kod
+     `raw`'a bakmaz; taban ayrı bir kolon olmazsa "sessizce yanlış karşılaştırma"
+     riski kod incelemesinden kaçar.
+
+     'reach'       : (likes+comments+saves+shares)/reach×100 — Instagram (adım 17b).
+     'followers'   : (likes+comments+shares)/followers×100 — reach YOK, takipçi
+                     tabanlı yaklaşık oran (Bluesky, bugün). AYRI bir ölçek —
+                     'reach' tabanlı satırlarla KARŞILAŞTIRILAMAZ.
+     'unavailable' : hiçbiri hesaplanamadı (reach yok VE takipçi 0) — `0`
+                     GERÇEK bir oran DEĞİL, "ölçülemedi" demek. Sıralama/geri
+                     besleme bu satırları HİÇ kullanmamalı.
+
+     `lib/core/metrics/basis.ts` — karşılaştırma/ortalama yalnızca AYNI taban
+     içinde yapılmalı; kural orada kod + testle uygulanıyor. */
+  engagement_rate_basis text not null default 'unavailable'
+                  check (engagement_rate_basis in ('reach', 'followers', 'unavailable')),
+
   collected_at    timestamptz not null default now()
 );
+
+-- Yakınsama — content_metrics tablosu eski şekliyle zaten varsa
+-- engagement_rate_basis'i ekler ve CHECK'ini tazeler (brands.content_language
+-- ile aynı desen, yukarıda).
+alter table public.content_metrics
+  add column if not exists engagement_rate_basis text not null default 'unavailable';
+
+alter table public.content_metrics
+  drop constraint if exists content_metrics_engagement_rate_basis_check;
+alter table public.content_metrics
+  add constraint content_metrics_engagement_rate_basis_check
+  check (engagement_rate_basis in ('reach', 'followers', 'unavailable'));
 
 -- İçerik başına "en son ölçüm" sorgusunun taradığı indeks:
 --   distinct on (content_item_id) ... order by content_item_id, collected_at desc
@@ -1136,6 +1173,11 @@ create unique index if not exists content_metrics_final_idx
 
    Fonksiyon olarak yazıldı çünkü kural TEK OLMALI: analitik ekranı, plan geri
    beslemesi ve ileride bir rapor aynı satır kümesini görmeli. */
+-- `create or replace` dönüş SATIRI (OUT parametre kümesi) değiştiğinde
+-- reddediyor ("cannot change return type of existing function") — adım 18
+-- Düzeltme 1 `engagement_rate_basis` kolonunu eklediği için burada da
+-- ÖNCE DÜŞÜRÜLMESİ gerekiyor. `if exists` fresh kurulumda no-op.
+drop function if exists public.brand_latest_metrics(uuid, int);
 create or replace function public.brand_latest_metrics(
   p_brand_id uuid,
   p_days int default 35
@@ -1149,6 +1191,7 @@ create or replace function public.brand_latest_metrics(
   saves           integer,
   shares          integer,
   engagement_rate numeric,
+  engagement_rate_basis text,
   tier_weight     real
 ) language sql stable security definer set search_path = public as $$
   select distinct on (m.content_item_id)
@@ -1157,6 +1200,7 @@ create or replace function public.brand_latest_metrics(
          m.collected_at,
          m.reach, m.likes, m.comments, m.saves, m.shares,
          m.engagement_rate,
+         m.engagement_rate_basis,
          case m.tier when 'final' then 1.0::real else 0.7::real end as tier_weight
     from public.content_metrics m
    where m.brand_id = p_brand_id

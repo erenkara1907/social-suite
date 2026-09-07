@@ -2284,3 +2284,58 @@ FAZ 2 sonu kararı) — Bluesky orada tarif edilen "X/LinkedIn/TikTok'u en
 sona koy" kararını GENİŞLETMİYOR, çünkü Bluesky zaten `PLATFORMS`
 listesinde yeni bir üye olarak ekleniyor, §8.8'in kapsamındaki üç platform
 (X/LinkedIn/TikTok) hâlâ FAZ 2'nin sonunda.
+
+### D11 — Etkileşim oranı tabanı birinci sınıf oldu; `channels.growth` etiketi düzeltildi; kalıcı bir "etiket = ölçüm" kuralı eklendi (adım 18)
+
+**Sorun 1:** §4f'in Instagram formülü (`(likes+comments+saves+shares)/reach×100`)
+Bluesky'de kurulamaz — Bluesky `reach` VERMİYOR (`docs/ADIM_18_RAPOR.md`
+§A1). Toplayıcı bunun yerine reach yoksa **takipçi tabanlı** bir oran
+hesaplıyor (`(likes+comments+shares)/followers×100`) — plan metninde
+olmayan, gerekçeli bir sapma. İki formül AYNI ölçek DEĞİL; ilk yazımda
+hangi formülün kullanıldığı yalnızca `content_metrics.raw` JSON'una
+gömülüydü — sıralama/ortalama alan kod `raw`'a bakmadığı için bu, iki
+farklı ölçekteki sayıyı SESSİZCE karıştırma riski taşıyordu.
+
+**Karar:** `content_metrics.engagement_rate_basis` (`'reach' | 'followers'
+| 'unavailable'`) birinci sınıf bir kolon oldu (idempotent migration —
+`brands.content_language` deseninin aynısı), `brand_latest_metrics()`
+onu da döndürüyor, `MetricRow.engagement_rate_basis` TS tarafında ZORUNLU
+alan. Karşılaştırma/ortalama/sıralama kuralı `lib/core/metrics/basis.ts`'te
+kod + testle uygulanıyor (`groupByEngagementBasis`, `dominantEngagementGroup`,
+`withMeasurableEngagement`) — `unavailable` (ölçülemedi, `0` GERÇEK bir
+değer DEĞİL) satırlar hiçbir gruba girmiyor. Bugün tek platform (bluesky)
+olduğu için bu ayrım pratikte görünmüyor ama TEST EDİLİYOR
+(`lib/core/metrics/basis.test.ts`, sentetik çok-tabanlı girdilerle) —
+Instagram (adım 17b) `reach` tabanını gerçek veriyle devreye sokacak.
+
+**Sorun 2:** `channels.growth` kolonunun yorumu "% / 30 gün" diyordu;
+gerçek yazan kod (`refreshBlueskyChannelStats`) SON SENKRONDAN bu yana
+değişimi yazıyor (`sm-metrics` saatte bir çalıştığı için pratikte "~son
+1 saatteki değişim"). Kod DOĞRU, etiket YANLIŞTI.
+
+**Karar:** Şema yorumu ve arayüz etiketi gerçeğe uydurulacak (adım 18
+FAZ B'nin işi — bu revizyon kararı kayda geçiriyor). **Gerçek 30 günlük
+büyüme İLERİDE DEĞERLENDİRİLECEK** bir madde: bunun için takipçi sayısının
+zaman serisi (bir `channel_follower_snapshots` tablosu ya da benzeri)
+gerekir — bu adımın kapsamı DEĞİL, şema henüz eklenmedi.
+
+**⭐ Kalıcı kural — bir metriğin ETİKETİ ölçtüğü şeyi BİREBİR söylemeli.**
+Bu, aynı hatanın üçüncü örneği: siraya'nın hep `0` gösteren "Otomatik
+kaydırma" KPI'sı (ADIM_012), adım 8'in ilk yazımında ham satırları üç kez
+sayan "Bu ay erişim" kartı, şimdi `channels.growth`'un "% / 30 gün" yanlış
+etiketi. Üçünde de KOD çalışıyordu (ya da kolayca çalışır hale getirilebilirdi)
+— sorun hep ETİKETİN ölçülen şeyle uyuşmamasıydı. Kural:
+
+1. Bir metriğin etiketi (ekranda görünen ad, şema yorumu, TS docstring'i)
+   GERÇEKTEN ölçülen şeyi birebir söylemeli — "30 günlük büyüme" yazıp
+   "son senkrondan bu yana değişim" ölçmek YASAK.
+2. Bir şey ÖLÇÜLEMİYORSA (veri yok, platform vermiyor, kod henüz yazılmadı)
+   GÖSTERİLMEZ — `0`, `—` ya da boş bir kart bunun yerini TUTAMAZ; ya
+   dürüst bir "ölçülemiyor" durumu gösterilir ya da kart hiç render edilmez.
+3. Bir değer TAHMİNSE (yaklaşık, başka bir tabandan türetilmiş, kalibre
+   edilmemiş bir eşikle hesaplanmış) bu AÇIKÇA "tahmin"/"yaklaşık" olarak
+   işaretlenir — kesin bir ölçüm gibi sunulmaz.
+
+Bu kural her yeni KPI/kart/metrik eklendiğinde uygulanmalı; §12'nin ilerideki
+adımları (özellikle 17b'nin Instagram metrikleri, 21'in güvenlik/kalite
+denetimi) bu üç maddeye karşı denetlenmeli.

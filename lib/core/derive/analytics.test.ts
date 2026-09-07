@@ -32,7 +32,10 @@ function item(
 }
 
 function metric(over: Partial<MetricRow> & Pick<MetricRow, "content_item_id" | "collected_at">): MetricRow {
-  return { reach: 0, likes: 0, comments: 0, shares: 0, engagement_rate: 0, tier: "final", ...over };
+  return {
+    reach: 0, likes: 0, comments: 0, shares: 0, engagement_rate: 0,
+    engagement_rate_basis: "reach", tier: "final", ...over,
+  };
 }
 
 describe("latestMetrics", () => {

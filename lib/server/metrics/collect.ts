@@ -8,7 +8,8 @@ import {
   type BlueskySession,
 } from "@/lib/core/providers/bluesky";
 import { metricsCollectionStatus, type LatestMetricPoint } from "@/lib/core/metrics/tier";
-import type { MetricTier } from "@/lib/core/types";
+import { dominantEngagementGroup } from "@/lib/core/metrics/basis";
+import type { EngagementRateBasis, MetricTier } from "@/lib/core/types";
 
 /**
  * `metrics_collect` işleyicisinin gövdesi — §12 adım 18 FAZ A2. Yapısı
@@ -158,6 +159,7 @@ export async function collectContentMetrics(admin: SupabaseClient, contentItemId
       content_item_id: item.id, brand_id: item.brand_id, user_id: item.user_id,
       tier: "final", reach: 0, impressions: 0, likes: 0, comments: 0, shares: 0,
       saves: 0, video_views: 0, profile_visits: 0, engagement_rate: 0,
+      engagement_rate_basis: "unavailable", // ölçülemedi — 0 GERÇEK bir oran değil
       raw: { status: "not_found", uri: item.external_post_id },
     });
     if (insertError && insertError.code !== "23505") {
@@ -175,7 +177,7 @@ export async function collectContentMetrics(admin: SupabaseClient, contentItemId
 
   const rawEngagement = post.likeCount + post.replyCount + post.repostCount;
   let engagementRate = 0;
-  let engagementRateBasis: "reach" | "followers" | "unavailable" = "unavailable";
+  let engagementRateBasis: EngagementRateBasis = "unavailable";
   if (!platformProvidesReach("bluesky") && channel.followers > 0) {
     engagementRate = Number(((rawEngagement / channel.followers) * 100).toFixed(2));
     engagementRateBasis = "followers";
@@ -187,6 +189,7 @@ export async function collectContentMetrics(admin: SupabaseClient, contentItemId
     likes: post.likeCount, comments: post.replyCount, shares: post.repostCount,
     saves: 0, video_views: 0, profile_visits: 0,
     engagement_rate: engagementRate,
+    engagement_rate_basis: engagementRateBasis, // birinci sınıf kolon — sıralama/geri besleme RAW'a bakmaz
     raw: { ...post, engagementRateBasis },
   });
   if (insertError) {
@@ -259,6 +262,13 @@ export async function refreshBlueskyChannelStats(admin: SupabaseClient, channelI
   const growth = oldFollowers > 0 ? Number((((newFollowers - oldFollowers) / oldFollowers) * 100).toFixed(2)) : 0;
 
   // Kanalın en son içerik-başına ölçümlerinin ortalaması (h6 hariç, D1 ruhu).
+  //
+  // ⭐ adım 18 Düzeltme 1 — bu ortalama yalnızca AYNI tabana sahip satırlar
+  // arasında alınır (`dominantEngagementGroup`). `unavailable` satırlar hiç
+  // katılmaz — onların `0`'ı GERÇEK bir değer değil. Bugün tek platform
+  // (bluesky, hep `followers` ya da `unavailable`) olduğu için bu fonksiyon
+  // pratikte tek grubu ortalıyor; Instagram (adım 17b) `reach` tabanını
+  // gerçek veriyle devreye soktuğunda bu satır İKİ tabanı KARIŞTIRMAYACAK.
   const { data: contentIds } = await admin
     .from("content_items").select("id").eq("channel_id", channelId)
     .returns<ContentIdRow[]>();
@@ -267,18 +277,29 @@ export async function refreshBlueskyChannelStats(admin: SupabaseClient, channelI
     const ids = contentIds.map((c) => c.id);
     const { data: rows } = await admin
       .from("content_metrics")
-      .select("content_item_id,engagement_rate,collected_at,tier")
+      .select("content_item_id,engagement_rate,engagement_rate_basis,collected_at,tier")
       .in("content_item_id", ids)
       .neq("tier", "h6")
       .order("collected_at", { ascending: false })
-      .returns<{ content_item_id: string; engagement_rate: number; collected_at: string; tier: MetricTier }[]>();
+      .returns<
+        { content_item_id: string; engagement_rate: number; engagement_rate_basis: EngagementRateBasis; collected_at: string; tier: MetricTier }[]
+      >();
     if (rows && rows.length > 0) {
-      const latestPerItem = new Map<string, number>();
+      const latestPerItem = new Map<string, { engagement_rate: number; engagement_rate_basis: EngagementRateBasis }>();
       for (const row of rows) {
-        if (!latestPerItem.has(row.content_item_id)) latestPerItem.set(row.content_item_id, Number(row.engagement_rate));
+        if (!latestPerItem.has(row.content_item_id)) {
+          latestPerItem.set(row.content_item_id, {
+            engagement_rate: Number(row.engagement_rate),
+            engagement_rate_basis: row.engagement_rate_basis,
+          });
+        }
       }
-      const values = [...latestPerItem.values()];
-      engagement = Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2));
+      const dominant = dominantEngagementGroup([...latestPerItem.values()]);
+      if (dominant) {
+        engagement = Number(
+          (dominant.rows.reduce((a, b) => a + b.engagement_rate, 0) / dominant.rows.length).toFixed(2),
+        );
+      }
     }
   }
 

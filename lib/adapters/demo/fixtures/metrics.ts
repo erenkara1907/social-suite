@@ -75,6 +75,7 @@ export function demoMetricRows(now: Date): MetricRow[] {
       reach: h6Reach,
       ...engagementSplit(h6Reach, h6Engagement),
       engagement_rate: h6Engagement,
+      engagement_rate_basis: "reach", // demo verisi reach dolduruyor → Instagram tarzı taban
       tier: "h6",
       collected_at: at(now, publishedOffset, "23:00"),
     });
@@ -86,6 +87,7 @@ export function demoMetricRows(now: Date): MetricRow[] {
       reach: d1Reach,
       ...engagementSplit(d1Reach, d1Engagement),
       engagement_rate: d1Engagement,
+      engagement_rate_basis: "reach",
       tier: "d1",
       collected_at: at(now, publishedOffset + 1, "06:00"),
     });
@@ -96,6 +98,7 @@ export function demoMetricRows(now: Date): MetricRow[] {
         reach,
         ...engagementSplit(reach, engagement),
         engagement_rate: engagement,
+        engagement_rate_basis: "reach",
         tier: "final",
         collected_at: at(now, publishedOffset + 30, "06:00"),
       });

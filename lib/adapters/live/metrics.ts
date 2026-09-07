@@ -14,7 +14,7 @@
  * tek kaynak, `/analytics` ve geri besleme (§8.3) aynı satırları görür.
  */
 import type { MetricsPort } from "@/lib/adapters/ports";
-import type { MetricRow, MetricTier } from "@/lib/core/types";
+import type { EngagementRateBasis, MetricRow, MetricTier } from "@/lib/core/types";
 import { requireBrand } from "@/lib/server/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,6 +25,7 @@ interface ContentMetricsRow {
   comments: number;
   shares: number;
   engagement_rate: number;
+  engagement_rate_basis: EngagementRateBasis;
   tier: MetricTier;
   collected_at: string;
 }
@@ -39,6 +40,7 @@ interface BrandLatestMetricsRow {
   saves: number;
   shares: number;
   engagement_rate: number;
+  engagement_rate_basis: EngagementRateBasis;
   tier_weight: number;
 }
 
@@ -50,7 +52,7 @@ export const liveMetrics: MetricsPort = {
 
     const { data, error } = await supabase
       .from("content_metrics")
-      .select("content_item_id,reach,likes,comments,shares,engagement_rate,tier,collected_at")
+      .select("content_item_id,reach,likes,comments,shares,engagement_rate,engagement_rate_basis,tier,collected_at")
       .eq("brand_id", brand.id)
       .gte("collected_at", cutoff)
       .order("collected_at", { ascending: true })
@@ -74,6 +76,7 @@ export const liveMetrics: MetricsPort = {
       comments: r.comments,
       shares: r.shares,
       engagement_rate: Number(r.engagement_rate),
+      engagement_rate_basis: r.engagement_rate_basis,
       tier: r.tier,
       collected_at: r.collected_at,
     }));
