@@ -8,18 +8,38 @@
 # dosyada yerine konur. Repoya sır yazılmaz.
 #
 # Kullanım:
-#   supabase/apply.sh            # uygula
-#   supabase/apply.sh --verify   # uygulama yok, yalnızca doğrulama sorguları
-#   CRON_ACTIVE=true supabase/apply.sh
+#   supabase/apply.sh                          # uygula — cron durumuna DOKUNMAZ
+#   supabase/apply.sh --verify                 # uygulama yok, yalnızca doğrulama sorguları
+#   supabase/apply.sh --set-cron-active=true    # uygula + tüm sm-% job'ları aktive et
+#   supabase/apply.sh --set-cron-active=false   # uygula + tüm sm-% job'ları pasive et
 #
+# Adım 21 FAZ A: eskiden CRON_ACTIVE env değişkeninin varsayılanı (false) HER
+# çalıştırmada mevcut cron durumunu sessizce ezerdi — üretimde dönen job'lar
+# bir sonraki `apply.sh` çalıştırmasında fark edilmeden kapanabilirdi. Artık
+# cron durumu yalnızca --set-cron-active açıkça verildiğinde değişir; mevcut
+# bir kurulumda bayraksız çalıştırma cron'a hiç dokunmaz (00_schema.sql §10
+# da aynı ilkeyi izliyor: iş zaten varsa active durumu orada da korunur —
+# bu bayrak sadece BİLİNÇLİ bir geçersiz kılma).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCHEMA="$ROOT/supabase/00_schema.sql"
 ENV_FILE="$ROOT/.env.local"
 
+[[ -z "${CRON_ACTIVE:-}" ]] || \
+  echo "UYARI: CRON_ACTIVE ortam değişkeni artık okunmuyor (görmezden gelindi) — --set-cron-active=true|false kullanın." >&2
+
 VERIFY_ONLY=false
-[[ "${1:-}" == "--verify" ]] && VERIFY_ONLY=true
+SET_CRON_FLAG=false
+CRON_ACTIVE=""
+for arg in "$@"; do
+  case "$arg" in
+    --verify) VERIFY_ONLY=true ;;
+    --set-cron-active=true)  SET_CRON_FLAG=true; CRON_ACTIVE=true ;;
+    --set-cron-active=false) SET_CRON_FLAG=true; CRON_ACTIVE=false ;;
+    *) echo "HATA: bilinmeyen argüman: $arg" >&2; exit 1 ;;
+  esac
+done
 
 # ── 1. env yükle ────────────────────────────────────────────────────────────
 [[ -f "$ENV_FILE" ]] || { echo "HATA: $ENV_FILE yok." >&2; exit 1; }
@@ -28,12 +48,6 @@ set -a; . "$ENV_FILE"; set +a
 : "${SUPABASE_DB_URL:?HATA: SUPABASE_DB_URL boş (.env.local)}"
 : "${NEXT_PUBLIC_APP_URL:?HATA: NEXT_PUBLIC_APP_URL boş (.env.local)}"
 : "${CRON_SECRET:?HATA: CRON_SECRET boş (.env.local)}"
-
-# A2: varsayılan PASİF. APP_URL localhost iken Supabase bulutu erişemez;
-# aktif job her tetiklenmede cron.job_run_details'i hata ile doldurur.
-CRON_ACTIVE="${CRON_ACTIVE:-false}"
-[[ "$CRON_ACTIVE" == "true" || "$CRON_ACTIVE" == "false" ]] \
-  || { echo "HATA: CRON_ACTIVE 'true' veya 'false' olmalı (verilen: $CRON_ACTIVE)" >&2; exit 1; }
 
 PSQL=(psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --no-psqlrc)
 
@@ -85,9 +99,12 @@ apply_schema() {
   echo "şema OK"
 }
 
-# ── 4. cron etkinliği (A2) ──────────────────────────────────────────────────
+# ── 4. cron etkinliği — YALNIZCA --set-cron-active ile (adım 21 FAZ A) ───────
+# Bayraksız çalıştırmada bu fonksiyon hiç ÇAĞRILMAZ: 00_schema.sql §10 zaten
+# mevcut job'ların active durumunu koruyor, burası yalnızca BİLİNÇLİ bir
+# geçersiz kılma için var.
 set_cron_active() {
-  echo "── cron job'ları: active=$CRON_ACTIVE ──"
+  echo "── cron job'ları: active=$CRON_ACTIVE (--set-cron-active ile İSTENDİ) ──"
   "${PSQL[@]}" -q -c "
     do \$\$
     declare r record;
@@ -106,6 +123,8 @@ verify() {
 if [[ "$VERIFY_ONLY" == false ]]; then
   ensure_extensions
   apply_schema
-  set_cron_active
+  if [[ "$SET_CRON_FLAG" == true ]]; then
+    set_cron_active
+  fi
 fi
 verify

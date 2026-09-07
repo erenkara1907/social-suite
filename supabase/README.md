@@ -30,22 +30,33 @@ izinli geçici bir dosyada yerine konur; dosya psql bittiğinde silinir.
 `00_schema.sql` placeholder'lı hâliyle repoda kalır — `grep __CRON_SECRET__`
 her zaman eşleşmelidir.
 
-## ⚠ Cron job'ları PASİF kuruluyor (`CRON_ACTIVE=false`)
+## Cron job'ları — yeni kurulumda PASİF, mevcut kurulumda DOKUNULMAZ
 
 `cron_fire()` `NEXT_PUBLIC_APP_URL || path` adresine `pg_net` ile istek atar.
 Bu adres geliştirmede `http://localhost:3000` — **Supabase bulutundan
 erişilemez**. Aktif bırakılırsa beş job (`sm-worker` dakikada bir) her
 tetiklenmede bağlantı hatası üretir ve `cron.job_run_details` dolar.
 
-Bu yüzden `apply.sh` job'ları `cron.schedule` ile **oluşturur**, sonra
-`cron.alter_job(..., active := false)` ile **kapatır**. Varsayılan
-`CRON_ACTIVE=false`.
-
-Aktifleştirme **§12 adım 17**'de (LIVE #3 — yayın), gerçek domain hazır olunca:
+⚠ **Adım 21 FAZ A ile değişti.** Eskiden `apply.sh` her çalıştırmada beş
+job'ı da `cron.schedule` ile **yeniden kurar** ve `cron.alter_job(...,
+active := $CRON_ACTIVE)` ile **ezerdi** — üretimde dönen bir kurulumda
+sonraki bir `apply.sh` çalıştırması cron'u sessizce kapatabiliyordu
+(ADIM_18 varsayım 6). Artık `00_schema.sql` mevcut bir job'ın `active`
+durumunu OLDUĞU GİBİ korur; `apply.sh` cron'a **yalnızca** açık bir bayrakla
+dokunur:
 
 ```
-NEXT_PUBLIC_APP_URL=https://<gerçek-domain>   # .env.local
-CRON_ACTIVE=true supabase/apply.sh
+supabase/apply.sh                          # uygula — cron durumuna DOKUNMAZ
+supabase/apply.sh --set-cron-active=true    # uygula + tüm sm-% job'ları aktive et
+supabase/apply.sh --set-cron-active=false   # uygula + tüm sm-% job'ları pasive et
 ```
+
+İlk kurulumda (job hiç yoksa) varsayılan yine PASİF — yukarıdaki gerekçe
+(localhost erişilemezliği) geçerliliğini koruyor. Bayrak, mevcut BİR job'ın
+durumunu BİLİNÇLİ olarak toptan değiştirmek içindir (§12 adım 17 gibi ilk
+canlıya alma anlarında); günlük `apply.sh` çalıştırmaları bayraksız kalmalı.
 
 `cron_fire()` `create or replace` olduğu için yeniden uygulama URL'i tazeler.
+Her tetiklenmede `public.cron_heartbeats`'e de yazar — `/api/cron/health`
+(`CRON_SECRET` gerekir) bunun yaşını okuyup cron'un sessizce durmasını
+görünür kılar (`docs/CRON_AKTIVASYON.md`).

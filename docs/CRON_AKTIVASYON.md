@@ -4,6 +4,15 @@ BIRLESIM_PLANI §12 adım 12 FAZ D. **Bu belge yalnızca dokümantasyondur —
 hiçbir komut bu oturumda ÇALIŞTIRILMADI.** Cron job'lar hâlâ pasif
 (`active=false`, 5/5 — doğrulama aşağıda).
 
+> ⚠ **Adım 21 güncellemesi — bu belge artık TARİHSEL.** Bugün üretimde
+> `sm-worker`/`sm-publish`/`sm-metrics`/`sm-reaper` aktif, `sm-token-refresh`
+> pasif (16/17b Instagram henüz yok). Aşağıdaki "hepsi pasif" anlatımı ve
+> `CRON_ACTIVE=true supabase/apply.sh` komutu artık geçerli değil —
+> `apply.sh` cron durumuna varsayılan olarak hiç dokunmuyor, yalnızca
+> `--set-cron-active=true|false` bayrağıyla değişiyor (bkz.
+> `supabase/README.md`, `docs/ADIM_21_RAPOR.md` FAZ A). Cron'un sessizce
+> durup durmadığı artık `/api/cron/health`'ten izlenebilir.
+
 ---
 
 ## Bugünkü durum

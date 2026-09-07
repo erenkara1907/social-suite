@@ -42,16 +42,20 @@ select c.relname as tablo,
  order by c.relname;
 
 \echo ''
-\echo '════ 5. CRON JOB''LARI (A2: hepsi active=false olmalı) ════'
+\echo '════ 5. CRON JOB''LARI (adım 21 FAZ A: apply.sh --set-cron-active DIŞINDA bu durum DEĞİŞMEMELİ) ════'
 select jobid, jobname, schedule, active
   from cron.job where jobname like 'sm-%' order by jobname;
 
 select count(*) as sm_job_sayisi,
        count(*) filter (where active) as aktif_sayisi,
-       case when count(*) = 5 and count(*) filter (where active) = 0
-            then 'OK — 5 job var, hiçbiri aktif değil'
-            else 'HATA' end as sonuc
+       case when count(*) = 5 then 'OK — 5 job var (aktiflik CRON_AKTIVASYON.md''e göre kasıtlı)'
+            else 'HATA — beklenen 5' end as sonuc
   from cron.job where jobname like 'sm-%';
+
+\echo ''
+\echo '════ 5b. CRON KALP ATIŞLARI (adım 21 FAZ A: son tetiklenme yaşı) ════'
+select jobname, fired_at, now() - fired_at as yas
+  from public.cron_heartbeats order by jobname;
 
 \echo ''
 \echo '════ 6. VAULT (çoğalma kontrolü: sm_cron_secret tam 1 satır) ════'

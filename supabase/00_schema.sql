@@ -1497,9 +1497,30 @@ create policy "own jobs read" on public.jobs
 select vault.create_secret('__CRON_SECRET__', 'sm_cron_secret', 'Bearer token for /api/cron/*')
 where not exists (select 1 from vault.secrets where name = 'sm_cron_secret');
 
-/* Tek bir tetikleyici yardımcı: her job aynı şekilde çağırır. */
-create or replace function public.cron_fire(path text, timeout_ms int default 55000)
+-- Kalp atışı — adım 21 FAZ A: cron'un "sessizce durması" bugün fark
+-- edilemiyordu (ne hata, ne log — sadece durur). cron_fire() her tetiklendiğinde
+-- burayı yazar; /api/cron/health bunun yaşını okur. `net.http_get` fire-and-forget
+-- olduğundan bu yalnızca "cron TETİKLENDİ mi" sorusuna cevap verir — hedef
+-- rotanın başarıyla bittiğini DEĞİL (o ayrı bir izlenebilirlik konusu, kapsam dışı).
+create table if not exists public.cron_heartbeats (
+  jobname   text primary key,
+  fired_at  timestamptz not null default now()
+);
+alter table public.cron_heartbeats enable row level security;
+-- politika yok: rate_limit_counters ile aynı desen — yalnızca service-role okur
+-- (health endpoint'i admin client kullanır, kullanıcıya özel veri değil).
+
+/* Tek bir tetikleyici yardımcı: her job aynı şekilde çağırır ve önce kendi
+   kalp atışını yazar. */
+drop function if exists public.cron_fire(text, int);
+create or replace function public.cron_fire(job text, path text, timeout_ms int default 55000)
 returns bigint language sql security definer set search_path = public as $$
+  with h as (
+    insert into public.cron_heartbeats (jobname, fired_at)
+    values (job, now())
+    on conflict (jobname) do update set fired_at = excluded.fired_at
+    returning 1
+  )
   select net.http_get(
     url     := '__APP_URL__' || path,
     headers := jsonb_build_object(
@@ -1510,35 +1531,51 @@ returns bigint language sql security definer set search_path = public as $$
     -- pg_net 60sn'de bağlantıyı kapatır (KESIF_SIRAYA §12). Uzun iş bu yüzden
     -- endpoint'in içinde değil, jobs tablosunda yaşar: endpoint sadece tetikler.
     timeout_milliseconds := timeout_ms
-  );
+  ) from h;
 $$;
 
+-- Adım 21 FAZ A: bu blok artık job'ları KOŞULSUZ unschedule+reschedule etmiyor.
+-- Önceki hâli her `apply.sh` çalışmasında 5 job'ı da silip yeniden kuruyordu —
+-- pg_cron'da yeni kurulan job'ın active varsayılanı TRUE'dur, yani schema
+-- reapply'ı tek başına (apply.sh'ın kendi CRON_ACTIVE mantığından BAĞIMSIZ
+-- olarak) üretimdeki cron durumunu sıfırlıyordu. Şimdi: iş zaten varsa
+-- sadece zamanlaması güncellenir, active durumu OLDUĞU GİBİ korunur; iş
+-- yeniyse varsayılan pasif kurulur (A2 gerekçesi — bkz. apply.sh).
 do $$
-declare j text;
+declare
+  spec record;
+  was_active boolean;
+  new_jobid bigint;
 begin
-  foreach j in array array[
-    'sm-worker', 'sm-publish', 'sm-metrics', 'sm-token-refresh', 'sm-reaper'
-  ] loop
-    if exists (select 1 from cron.job where jobname = j) then
-      perform cron.unschedule(j);
+  for spec in
+    select * from (values
+      ('sm-worker',        '* * * * *',    '/api/cron/worker'),
+      ('sm-publish',       '*/5 * * * *',  '/api/cron/publish'),
+      ('sm-metrics',       '17 * * * *',   '/api/cron/metrics'),
+      ('sm-token-refresh', '30 3 * * *',   '/api/cron/tokens'),
+      ('sm-reaper',        '*/10 * * * *', '/api/cron/reaper')
+    ) as t(jobname, schedule, path)
+  loop
+    select active into was_active from cron.job where jobname = spec.jobname;
+
+    if was_active is not null then
+      perform cron.unschedule(spec.jobname);
     end if;
+
+    new_jobid := cron.schedule(
+      spec.jobname, spec.schedule,
+      format('select public.cron_fire(%L, %L);', spec.jobname, spec.path)
+    );
+
+    -- mevcut job: eski active durumunu geri yükle. yeni job: varsayılan pasif.
+    perform cron.alter_job(new_jobid, active := coalesce(was_active, false));
   end loop;
 end $$;
-
--- Kuyruk işçisi: her dakika, jobs tablosundan iş alır.
-select cron.schedule('sm-worker',        '* * * * *',    $$ select public.cron_fire('/api/cron/worker'); $$);
--- Yayın: 5 dakikada bir vadesi geleni kuyruğa koyar (siraya ritmi).
-select cron.schedule('sm-publish',       '*/5 * * * *',  $$ select public.cron_fire('/api/cron/publish'); $$);
--- Metrik toplama: saat başı; hangi içeriğin sırası geldiğini endpoint seçer.
-select cron.schedule('sm-metrics',       '17 * * * *',   $$ select public.cron_fire('/api/cron/metrics'); $$);
--- Token tazeleme: günde bir. Hiç yayın yapmayan kanalın token'ı 60 günde ölüyordu.
-select cron.schedule('sm-token-refresh', '30 3 * * *',   $$ select public.cron_fire('/api/cron/tokens'); $$);
--- Kilit süpürücü: 15 dakikadan uzun 'publishing'de kalanı geri alır.
-select cron.schedule('sm-reaper',        '*/10 * * * *', $$ select public.cron_fire('/api/cron/reaper'); $$);
 
 -- Kontrol:
 --   select jobname, schedule, active from cron.job where jobname like 'sm-%';
 --   select * from cron.job_run_details order by start_time desc limit 10;
+--   select jobname, fired_at, now() - fired_at as yas from public.cron_heartbeats order by jobname;
 
 
 -- ═════════════════════════════════════════════════════════════════════════════
