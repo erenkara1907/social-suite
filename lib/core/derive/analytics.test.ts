@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  anyPlatformProvidesReach,
   buildEngagementTrend,
   buildHeatmap,
   buildMix,
@@ -131,6 +132,14 @@ describe("buildHeatmap", () => {
     );
     expect(buildHeatmap(posts, metrics, TZ).bestWindows.length).toBeLessThanOrEqual(3);
   });
+
+  it("⭐ D11 — engagement_rate_basis 'unavailable' olan TEK ölçümü hiç saymaz (0 GERÇEK değil)", () => {
+    const posts = [item({ id: "1", platform: "bluesky", kind: "text", status: "published", title: "a", published_at: "2026-08-24T15:00:00Z" })];
+    const metrics = [metric({ content_item_id: "1", engagement_rate: 0, engagement_rate_basis: "unavailable", collected_at: "2026-08-25T00:00:00Z" })];
+    const { heatmap, bestWindows } = buildHeatmap(posts, metrics, TZ);
+    expect(heatmap.flat().every((v) => v === 0)).toBe(true);
+    expect(bestWindows).toEqual([]);
+  });
 });
 
 describe("buildReach14d", () => {
@@ -208,6 +217,17 @@ describe("buildEngagementTrend", () => {
     const metrics = [metric({ content_item_id: "1", engagement_rate: 5, collected_at: "2026-08-23T06:00:00Z" })];
     expect(buildEngagementTrend(metrics, NOW).delta).toBe(0);
   });
+
+  it("⭐ D11 — engagement_rate_basis 'unavailable' olan satırları ortalamaya HİÇ katmaz", () => {
+    const metrics = [
+      metric({ content_item_id: "1", engagement_rate: 8, engagement_rate_basis: "followers", collected_at: "2026-08-23T06:00:00Z" }),
+      metric({ content_item_id: "2", engagement_rate: 0, engagement_rate_basis: "unavailable", collected_at: "2026-08-23T06:00:00Z" }),
+    ];
+    const { trend } = buildEngagementTrend(metrics, NOW);
+    // unavailable satır dahil edilseydi ortalama (8+0)/2=4 olurdu; hariç
+    // tutulunca yalnızca ölçülebilir satır kalır: 8.
+    expect(trend[5].value).toBe(8);
+  });
 });
 
 describe("buildTopPosts", () => {
@@ -257,6 +277,54 @@ describe("buildTopPosts", () => {
     const posts = [item({ id: "1", platform: "instagram", kind: "image", status: "published", title: "a", published_at: "2026-08-01T00:00:00Z" })];
     const metrics = [metric({ content_item_id: "1", reach: 240, collected_at: "2026-08-02T00:00:00Z" })];
     expect(buildTopPosts(posts, metrics, TZ)[0].reach).toBe("240");
+  });
+
+  it("⭐ D11 — reach VERMEYEN platformda (bluesky) reachKnown false, reach '—' ve etkileşime göre sıralanır", () => {
+    const posts = [item({ id: "1", platform: "bluesky", kind: "text", status: "published", title: "a", published_at: "2026-08-01T00:00:00Z" })];
+    const metrics = [
+      metric({ content_item_id: "1", reach: 0, engagement_rate: 4.2, engagement_rate_basis: "followers", collected_at: "2026-08-02T00:00:00Z" }),
+    ];
+    const [top] = buildTopPosts(posts, metrics, TZ);
+    expect(top.reachKnown).toBe(false);
+    expect(top.reach).toBe("—");
+    expect(top.engagement).toBe(4.2);
+  });
+
+  it("⭐ D11 — engagement_rate_basis 'unavailable' olan bir bluesky içeriği listeden TAMAMEN düşer", () => {
+    const posts = [
+      item({ id: "olculebilir", platform: "bluesky", kind: "text", status: "published", title: "a", published_at: "2026-08-01T00:00:00Z" }),
+      item({ id: "olculemez", platform: "bluesky", kind: "text", status: "published", title: "b", published_at: "2026-08-01T00:00:00Z" }),
+    ];
+    const metrics = [
+      metric({ content_item_id: "olculebilir", engagement_rate: 3, engagement_rate_basis: "followers", collected_at: "2026-08-02T00:00:00Z" }),
+      metric({ content_item_id: "olculemez", engagement_rate: 0, engagement_rate_basis: "unavailable", collected_at: "2026-08-02T00:00:00Z" }),
+    ];
+    expect(buildTopPosts(posts, metrics, TZ).map((p) => p.id)).toEqual(["olculebilir"]);
+  });
+
+  it("reach VEREN platformda (instagram) reachKnown true kalır — davranış DEĞİŞMEDİ", () => {
+    const posts = [item({ id: "1", platform: "instagram", kind: "image", status: "published", title: "a", published_at: "2026-08-01T00:00:00Z" })];
+    const metrics = [metric({ content_item_id: "1", reach: 240, collected_at: "2026-08-02T00:00:00Z" })];
+    expect(buildTopPosts(posts, metrics, TZ)[0].reachKnown).toBe(true);
+  });
+});
+
+describe("anyPlatformProvidesReach", () => {
+  it("boş listede false döner", () => {
+    expect(anyPlatformProvidesReach([])).toBe(false);
+  });
+
+  it("yalnızca bluesky içerik varsa false döner — Bluesky reach vermiyor", () => {
+    const posts = [item({ id: "1", platform: "bluesky", kind: "text", status: "published", title: "a" })];
+    expect(anyPlatformProvidesReach(posts)).toBe(false);
+  });
+
+  it("en az bir reach-veren platform varsa true döner", () => {
+    const posts = [
+      item({ id: "1", platform: "bluesky", kind: "text", status: "published", title: "a" }),
+      item({ id: "2", platform: "instagram", kind: "image", status: "published", title: "b" }),
+    ];
+    expect(anyPlatformProvidesReach(posts)).toBe(true);
   });
 });
 

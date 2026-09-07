@@ -12,6 +12,18 @@ import {
 } from "@/lib/core/types";
 import { DEFAULT_TZ, dayKey, zonedParts } from "@/lib/core/tz";
 import { WEEKDAYS } from "@/lib/core/derive/calendar";
+import { platformProvidesReach } from "@/lib/core/publishing";
+
+/**
+ * ⭐ adım 18 D11 — bir metriğin etiketi ölçtüğü şeyi birebir söylemeli;
+ * ölçülemiyorsa gösterilmez. Erişim kartları/sütunları bu sorguyu kullanıp
+ * "0" ile "bu platform erişim vermiyor"u AYIRT eder — Bluesky (bugünkü tek
+ * canlı platform) reach hiç vermiyor (`lib/core/publishing.ts`
+ * `PLATFORMS_WITHOUT_REACH`).
+ */
+export function anyPlatformProvidesReach(posts: ContentItemRow[]): boolean {
+  return posts.some((p) => platformProvidesReach(p.platform));
+}
 
 export const HEATMAP_WINDOWS = ["06–09", "09–12", "12–15", "15–18", "18–21", "21–24"];
 const WINDOW_RANGES = ["06:00–09:00", "09:00–12:00", "12:00–15:00", "15:00–18:00", "18:00–21:00", "21:00–24:00"];
@@ -32,7 +44,15 @@ export function latestMetrics(metrics: MetricRow[]): Map<string, MetricRow> {
  * dropped — the grid starts at 06 but the data should not vanish.
  */
 export function buildHeatmap(posts: ContentItemRow[], metrics: MetricRow[], tz = DEFAULT_TZ) {
-  const latest = latestMetrics(metrics);
+  // ⭐ D11 — önce GERÇEK en son ölçüm seçilir (latestMetrics'in "içerik
+  // başına en yeni satır" sözleşmesi bozulmasın), SONRA ölçülemeyen
+  // ('unavailable' tabanlı, `0` GERÇEK bir değer değil) satırlar ortalamadan
+  // düşürülür. ⚠ Tam taban-gruplama (farklı tabanları AYRI ortalamak,
+  // `lib/core/metrics/basis.ts`) burada henüz YOK — bugün tek platform
+  // (bluesky) canlı olduğu için tek taban var, risksiz; adım 17b çoklu
+  // platformu gerçek veriyle getirdiğinde bu fonksiyon gözden geçirilmeli.
+  const latestAll = latestMetrics(metrics);
+  const latest = new Map([...latestAll].filter(([, m]) => m.engagement_rate_basis !== "unavailable"));
   const totals = Array.from({ length: 7 }, () => Array(6).fill(0) as number[]);
   const counts = Array.from({ length: 7 }, () => Array(6).fill(0) as number[]);
 
@@ -117,6 +137,9 @@ export function buildEngagementTrend(metrics: MetricRow[], now: Date) {
   const start = now.getTime() - 6 * 7 * 86400000;
 
   for (const m of metrics) {
+    // ⭐ D11 — 'unavailable' tabanlı satırlar ortalamaya HİÇ girmez, bkz.
+    // buildHeatmap'in aynı notu.
+    if (m.engagement_rate_basis === "unavailable") continue;
     const t = new Date(m.collected_at).getTime();
     if (t < start || t > now.getTime()) continue;
     const week = Math.min(5, Math.floor((t - start) / (7 * 86400000)));
@@ -135,17 +158,37 @@ export function buildEngagementTrend(metrics: MetricRow[], now: Date) {
   return { trend, delta };
 }
 
-/** Published posts ranked by reach. */
+/**
+ * Yayınlanmış gönderileri sıralar — §18 D11: platform reach VERİYORSA reach'e
+ * göre (mevcut, değişmedi); VERMİYORSA (bugün: bluesky) `engagement_rate`'e
+ * göre, ama YALNIZCA ölçülebilir (`engagement_rate_basis !== 'unavailable'`)
+ * satırlar arasında — ölçülemeyen bir içerik "0 etkileşim aldı" gibi
+ * SIRALANMAZ, listeden tamamen düşer.
+ *
+ * ⚠ Reach-veren ve vermeyen platformlar AYNI listede, FARKLI ölçeklerle
+ * (sayı vs. yüzde) sıralanıyor — bugün tek platform canlı olduğu için bu
+ * hiçbir zaman İKİ ölçeği aynı anda karşılaştırmıyor; çoklu platform
+ * (adım 17b) geldiğinde bu fonksiyon yeniden gözden geçirilmeli
+ * (bkz. `lib/core/metrics/basis.ts`, `build-feedback.ts`'in tam
+ * taban-gruplaması aynı sorunu FAZ C'de çözüyor).
+ */
 export function buildTopPosts(posts: ContentItemRow[], metrics: MetricRow[], tz = DEFAULT_TZ): TopPost[] {
   const latest = latestMetrics(metrics);
 
   const scored = posts
     .filter((p) => p.status === "published" && latest.has(p.id))
-    .map((post) => ({ post, metric: latest.get(post.id)! }))
-    .sort((a, b) => b.metric.reach - a.metric.reach)
+    .map((post) => {
+      const metric = latest.get(post.id)!;
+      const reachKnown = platformProvidesReach(post.platform);
+      const measurable = reachKnown || metric.engagement_rate_basis !== "unavailable";
+      const score = reachKnown ? metric.reach : metric.engagement_rate;
+      return { post, metric, reachKnown, measurable, score };
+    })
+    .filter((c) => c.measurable)
+    .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
-  return scored.map(({ post, metric }) => {
+  return scored.map(({ post, metric, reachKnown }) => {
     const { day, month } = zonedParts(post.published_at ?? post.scheduled_at!, tz);
     const shortTr = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"][month - 1];
     const shortEn = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][month - 1];
@@ -154,7 +197,8 @@ export function buildTopPosts(posts: ContentItemRow[], metrics: MetricRow[], tz 
       id: post.id,
       platform: post.platform,
       title: { tr: post.title, en: post.title } as L,
-      reach: metric.reach >= 1000 ? `${(metric.reach / 1000).toFixed(1)}K` : String(metric.reach),
+      reach: reachKnown ? (metric.reach >= 1000 ? `${(metric.reach / 1000).toFixed(1)}K` : String(metric.reach)) : "—",
+      reachKnown,
       engagement: Number(Number(metric.engagement_rate).toFixed(1)),
       when: { tr: `${day} ${shortTr}`, en: `${shortEn} ${day}` } as L,
     };

@@ -2,7 +2,7 @@ import { port } from "@/lib/adapters";
 import { requireBrand } from "@/lib/server/auth";
 import { requestModeOverrides } from "@/lib/server/mode";
 import {
-  buildEngagementTrend, buildHeatmap, buildReach14d, buildTopPosts, latestMetrics,
+  anyPlatformProvidesReach, buildEngagementTrend, buildHeatmap, buildReach14d, buildTopPosts, latestMetrics,
 } from "@/lib/core/derive/analytics";
 import type { MetricTier } from "@/lib/core/types";
 import { AnalyticsView } from "@/components/app/analytics-view";
@@ -58,8 +58,13 @@ export default async function Page() {
   // (demoMetrics.latest() filtreliyor); ham sayım burada, ekranda görünür.
   const h6ExcludedCount = rawMetrics.filter((m) => m.tier === "h6").length;
 
+  // ⭐ D11 — "0" ile "bu platform ölçmüyor" karışmasın; erişim kartı buna
+  // göre dürüst bir durum render eder.
+  const reachProvided = anyPlatformProvidesReach(items);
+
   return (
     <AnalyticsView
+      reachProvided={reachProvided}
       reach14d={reach14d}
       trend={trend}
       trendDelta={delta}

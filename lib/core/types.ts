@@ -446,7 +446,11 @@ export interface TopPost {
   id: string;
   platform: Platform;
   title: L;
+  /** `reachKnown` false iken bu, gerçek bir sıfır DEĞİL — "—" (platform
+   *  erişim vermiyor). §18 D11 kalıcı kural: ölçülemeyen bir şey 0 gibi
+   *  gösterilmez. */
   reach: string;
+  reachKnown: boolean;
   engagement: number;
   when: L;
 }

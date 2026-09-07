@@ -97,6 +97,10 @@ export const ui = {
     planUgcRequestError: "İstek kaydedilemedi, tekrar dene.",
     planChainTitle: "Devam eden zincirler",
     planChainHint: "Yeni planladığın bir slot bunlardan birinin devamı olabilir mi, önce buna bak.",
+    // ⭐ adım 18 FAZ C3 — geri besleme şeffaflığı: sonraki plan hangi sinyalleri kullanacak.
+    planFeedbackTitle: "Sonraki plan şunları öğrendi",
+    planFeedbackHint: "Son yayınlanan içeriklerin ölçümünden çıkarıldı — konu değil, yaklaşım.",
+    planFeedbackEmpty: "Henüz yeterli ölçülmüş veri yok — sonraki plan geri besleme olmadan üretilecek.",
     planEmpty: "Bu ufuk için üretilmiş bir slot yok.",
     demoBannerShell: "DEMO — ekrandaki veriler örnektir, gerçek hesabına ait değildir.",
     // settings
@@ -217,11 +221,14 @@ export const ui = {
     analyticsTierD1: "d1 · erken ölçüm",
     analyticsTierHint: "\"final\" 30 günlük toplamanın bittiğini gösterir; \"d1\" ölçüm hâlâ sürüyor demektir — ikisi de geri beslemeye girer, yalnızca güvenilirlik ağırlığı farklı.",
     analyticsH6Excluded: "İlk 48 saatin erken ve gürültülü ölçümleri (h6) bu sayılara girmiyor.",
+    // ⭐ adım 18 D11 — bir metrik ölçülemiyorsa "0" değil, bunu söyleyen bir metin.
+    analyticsReachNotProvidedHint: "Bağlı platformlar erişim ölçümü sağlamıyor (Bluesky beğeni/yanıt/repost veriyor, erişim vermiyor).",
     // ── adım 8: /dashboard ──────────────────────────────────────────────
     dashboardKpiPlanned: "Bu ay planlanan",
     dashboardKpiReview: "Onay bekleyen",
     dashboardKpiPublished: "Bu ay yayınlanan",
     dashboardKpiReach: "Bu ay yayınlananların erişimi",
+    dashboardKpiReachNotProvided: "Bu ay yayınlanan platformlar erişim ölçümü sağlamıyor.",
     dashboardUpcoming: "Yaklaşan yayınlar",
     dashboardUpcomingEmpty: "Yaklaşan yayın yok.",
     dashboardQuickAccess: "Hızlı erişim",
@@ -405,6 +412,10 @@ export const ui = {
     planUgcRequestError: "Could not save the request, try again.",
     planChainTitle: "Ongoing chains",
     planChainHint: "Check whether a newly planned slot might continue one of these before treating it as new.",
+    // ⭐ step 18 C3 — feedback transparency: what the next plan will use.
+    planFeedbackTitle: "The next plan learned this",
+    planFeedbackHint: "Drawn from recently published content's measured performance — the approach, not the topic.",
+    planFeedbackEmpty: "Not enough measured data yet — the next plan will be generated without feedback.",
     planEmpty: "No slots generated for this horizon.",
     demoBannerShell: "DEMO — the data on screen is sample data, not your account's.",
     settings: "Settings",
@@ -522,11 +533,14 @@ export const ui = {
     analyticsTierD1: "d1 · early read",
     analyticsTierHint: "\"final\" means the 30-day collection window is over; \"d1\" means collection is still running — both feed the loop back, they just carry a different reliability weight.",
     analyticsH6Excluded: "The first 48 hours' early, noisy reads (h6) are not counted here.",
+    // ⭐ step 18 D11 — a metric that can't be measured says so, not "0".
+    analyticsReachNotProvidedHint: "Connected platforms don't report reach (Bluesky gives likes/replies/reposts, no reach).",
     // ── step 8: /dashboard ──────────────────────────────────────────────
     dashboardKpiPlanned: "Planned this month",
     dashboardKpiReview: "Needs review",
     dashboardKpiPublished: "Published this month",
     dashboardKpiReach: "Reach of this month's publishes",
+    dashboardKpiReachNotProvided: "This month's platforms don't report reach.",
     dashboardUpcoming: "Upcoming publishes",
     dashboardUpcomingEmpty: "Nothing coming up.",
     dashboardQuickAccess: "Quick access",

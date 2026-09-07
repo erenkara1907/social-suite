@@ -2,7 +2,7 @@ import { port } from "@/lib/adapters";
 import { requireBrand } from "@/lib/server/auth";
 import { requestModeOverrides } from "@/lib/server/mode";
 import { buildQueue } from "@/lib/core/derive/calendar";
-import { buildMonthlyReach } from "@/lib/core/derive/analytics";
+import { anyPlatformProvidesReach, buildMonthlyReach } from "@/lib/core/derive/analytics";
 import { zonedParts } from "@/lib/core/tz";
 import type { DKpi } from "@/lib/core/types";
 import { ui } from "@/lib/i18n/dict";
@@ -60,13 +60,21 @@ export default async function Page() {
 
   const needsReview = items.filter((item) => item.status === "needs_review").length;
 
-  const publishedThisMonth = items.filter(
+  const publishedItemsThisMonth = items.filter(
     (item) => item.status === "published" && item.published_at && sameMonth(item.published_at, thisMonth, brand.timezone),
-  ).length;
+  );
+  const publishedThisMonth = publishedItemsThisMonth.length;
 
   // ⭐ adım 9 A1 — ham satırları toplamak yerine içerik başına en son ölçüm,
   // h6 hariç (D1). Ayrıntı: lib/core/derive/analytics.ts buildMonthlyReach.
   const reachThisMonth = buildMonthlyReach(items, metrics, now, brand.timezone);
+  // ⭐ adım 18 D11 — bu ayki yayınların platformu erişim VERMİYORSA "0"
+  // yerine dürüst bir metin; buildMonthlyReach'in kendisi hâlâ doğru
+  // toplamı hesaplıyor, yalnızca GÖSTERİM burada karar veriyor. Bu ay HİÇ
+  // yayın yoksa bu "platform ölçmüyor" değil "henüz yayın yok" demek —
+  // o durumda gerçek bir "0" gösterilir, "ölçülemedi" DEĞİL.
+  const reachProvidedThisMonth =
+    publishedItemsThisMonth.length === 0 || anyPlatformProvidesReach(publishedItemsThisMonth);
 
   const kpis: DKpi[] = [
     { label: label("dashboardKpiPlanned"), value: String(plannedThisMonth), icon: "calendar-range", tone: 1 },
@@ -74,7 +82,10 @@ export default async function Page() {
     { label: label("dashboardKpiPublished"), value: String(publishedThisMonth), icon: "send", tone: 3 },
     {
       label: label("dashboardKpiReach"),
-      value: reachThisMonth >= 1000 ? `${(reachThisMonth / 1000).toFixed(1)}K` : String(reachThisMonth),
+      value: reachProvidedThisMonth
+        ? (reachThisMonth >= 1000 ? `${(reachThisMonth / 1000).toFixed(1)}K` : String(reachThisMonth))
+        : "—",
+      hint: reachProvidedThisMonth ? undefined : label("dashboardKpiReachNotProvided"),
       icon: "eye",
       tone: 4,
     },

@@ -43,9 +43,17 @@ function TierBadge({ tier }: { tier: MetricTier | null }) {
   return null;
 }
 
+/** ⭐ D11 — bar genişliği "reach biliniyorsa reach, yoksa etkileşim %'i"
+ *  üzerinden ölçekleniyor (bkz. `buildTopPosts`'un aynı notu: bugün tek
+ *  platform canlı olduğu için bu ikisi bir listede hiç KARIŞMIYOR). */
+function metricValue(post: TopPost): number {
+  if (post.reachKnown) return Number(post.reach.replace("K", "")) * (post.reach.includes("K") ? 1000 : 1);
+  return post.engagement;
+}
+
 function TopPostsCard({ posts, tiers }: { posts: TopPost[]; tiers: Record<string, MetricTier | null> }) {
   const { t, ui } = useLang();
-  const maxReach = Math.max(1, ...posts.map((p) => Number(p.reach.replace("K", "")) * (p.reach.includes("K") ? 1000 : 1)));
+  const maxValue = Math.max(1, ...posts.map(metricValue));
 
   return (
     <Card>
@@ -54,8 +62,7 @@ function TopPostsCard({ posts, tiers }: { posts: TopPost[]; tiers: Record<string
       </CardHeader>
       <CardContent className="space-y-4">
         {posts.map((post) => {
-          const reachNum = Number(post.reach.replace("K", "")) * (post.reach.includes("K") ? 1000 : 1);
-          const width = Math.max(6, (reachNum / maxReach) * 100);
+          const width = Math.max(6, (metricValue(post) / maxValue) * 100);
           return (
             <div key={post.id}>
               <div className="flex items-center justify-between gap-2 text-sm">
@@ -205,6 +212,9 @@ function TrendCard({ points, delta }: { points: TrendPoint[]; delta: number }) {
 }
 
 export interface AnalyticsViewProps {
+  /** ⭐ D11 — hiçbir yayınlanmış içeriğin platformu reach VERMİYORSA false;
+   *  erişim kartı bunu "0" yerine dürüst bir metinle gösterir. */
+  reachProvided: boolean;
   reach14d: number[];
   trend: TrendPoint[];
   trendDelta: number;
@@ -219,7 +229,7 @@ export interface AnalyticsViewProps {
 }
 
 export function AnalyticsView({
-  reach14d, trend, trendDelta, heatmap, bestWindows, topPosts, topPostTiers,
+  reachProvided, reach14d, trend, trendDelta, heatmap, bestWindows, topPosts, topPostTiers,
   publishedCount, finalCount, d1Count, h6ExcludedCount,
 }: AnalyticsViewProps) {
   const { ui } = useLang();
@@ -245,7 +255,11 @@ export function AnalyticsView({
   return (
     <div className="space-y-6">
       <div className={cn("grid grid-cols-2 gap-3 lg:grid-cols-4")}>
-        <StatTile label={ui.analyticsReach14d} value={compact(totalReach)} />
+        <StatTile
+          label={ui.analyticsReach14d}
+          value={reachProvided ? compact(totalReach) : "—"}
+          hint={reachProvided ? undefined : ui.analyticsReachNotProvidedHint}
+        />
         <StatTile
           label={ui.analyticsAvgEngagement}
           value={`${trend.filter((p) => p.value > 0).slice(-1)[0]?.value ?? 0}%`}
