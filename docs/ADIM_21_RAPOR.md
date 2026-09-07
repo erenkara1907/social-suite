@@ -3,7 +3,7 @@
 Kaynak: `docs/BIRLESIM_PLANI.md` §10 (16 madde) + §12 adım 21.
 Bu adım yeni özellik yazmadı — denetledi, sertleştirdi, borç kapattı.
 
-Durum: FAZ A ✅ · FAZ B ✅ · FAZ C ✅ · FAZ D ✅ · FAZ E (bu bölüm sonda tamamlanacak).
+Durum: FAZ A ✅ · FAZ B ✅ · FAZ C ✅ · FAZ D ✅ · FAZ E ✅ (canlıya deploy edildi).
 
 ---
 
@@ -106,4 +106,93 @@ ve bu oturumda eklenen cron sağlık eşiği.
 
 ## FAZ E — Kapanış
 
-_(bu bölüm Faz E çalıştırıldıktan sonra doldurulacak)_
+**5 kapı + e2e** (commit `66b812d` üzerinde, deploy öncesi):
+
+| Kapı | Sonuç |
+|---|---|
+| `npx tsc --noEmit` | ✅ EXIT=0, çıktı yok |
+| `npm run lint` | ✅ EXIT=0 — 1 uyarı (`skeleton.test.ts:25`, bu oturumdan önce var, kapsam dışı), 0 hata |
+| `npm test` | ✅ EXIT=0 — 599 passed, 43 skipped (44 dosya) |
+| `npm run build` | ✅ EXIT=0 — 23 rota, `/api/cron/health` dahil kayıtlı |
+| `npm run test:e2e` | ✅ EXIT=0 — 15 passed (demo mod, ağ dışarı çıkmıyor) |
+
+**Deploy**: `vercel --prod` → `readyState: READY`, `dpl_Ev91r9MQuHw27kP73NhjSceZZqy9`,
+alias `https://app-gold-one-92.vercel.app` (kullanıcı onayıyla).
+
+**Dokuz ekran (canlı URL, oturumsuz)** — hepsi `/login`'e yönlendi (auth
+kapısı üretimde de canlı):
+
+```
+/dashboard /plan /studio /studio/personas /queue /analytics
+/channels /composer /library                          → hepsi 307
+```
+
+Kimlik doğrulanmış bir oturumla derinlemesine ekran doğrulaması
+YAPILMADI — gerçek müşteri hesabıyla oturum açmak ekstra bir onay
+gerektirirdi; yerel `demo` modundaki e2e paketi (15/15 yeşil, aynı derleme)
+zaten her ekranın render davranışını kanıtlıyor. Bu, routing + auth kapısının
+üretimde de canlı olduğunu kanıtlar; ekran içeriğinin canlı veriyle
+render'ını değil.
+
+**⚠ Deploy sonrası cron durumu** (bu adımın asıl endişesi):
+
+```
+$ /api/cron/health (canlı URL, CRON_SECRET ile)
+sm-worker   → 56sn önce   (stale: false)
+sm-publish  → 296sn önce  (stale: false)
+sm-reaper   → 296sn önce  (stale: false)
+sm-metrics  → henüz ateşlenmedi (saatlik, bir sonraki :17'yi bekliyor — normal)
+sm-token-refresh → henüz ateşlenmedi (pasif — beklenen)
+
+$ supabase/apply.sh --verify (DB'den doğrudan)
+sm-worker/publish/metrics/reaper = active(t), sm-token-refresh = active(f)
+— deploy ÖNCESİYLE BİREBİR AYNI.
+```
+
+Deploy cron durumunu bozmadı — FAZ A'nın kapattığı tuzak canlı deploy'dan
+da etkilenmiyor (deploy yalnızca uygulama kodunu değiştiriyor, cron durumu
+veritabanında yaşıyor).
+
+---
+
+## Varsayımlar + kalan işler
+
+**Varsayımlar (bu oturumda yapılan yorumlar/kararlar):**
+- §10 madde 3 ve 12 "KAPALI/MOOT" sayıldı — bugünkü mimaride konu kalmadı
+  (server action'lara taşındı / migration tamamlandı), yeniden test
+  edilmedi çünkü test edilecek bir şey yok.
+- §10 madde 6'nın çifte-yayın kanıtı YENİDEN ÇALIŞTIRILMADI — ADIM_17a'nın
+  canlı testi hâlâ geçerli sayıldı çünkü `publish-item.ts` o tarihten beri
+  değişmedi (`git log` tek commit). Yeniden çalıştırmak gerçek bir Bluesky
+  gönderisi daha açardı.
+- `find_similar_content`/`brand_latest_metrics`'e `owns_brand()` EKLENMEDİ —
+  bu bir gözden kaçırma değil, aktif bir karar: içeriye eklemek worker'ın
+  oturumsuz (service-role) çağrılarını kırardı (doğrulandı). Savunma
+  bilinçli olarak çağıran tarafında bırakıldı.
+- `run-provider-call.ts`'in `record_provider_verification()` RPC'sini
+  KULLANMAMASI bir bug olarak DÜZELTİLMEDİ — RPC `owns_brand()`'a (yani
+  `auth.uid()`'a) dayanıyor, worker bağlamında oturum yok, RPC'ye geçmek
+  kuyruk yolunu kırardı. `admin.ts`'in yorumu bunu netleştirdi.
+- Dokuz ekranın canlı/kimlik-doğrulanmış render'ı doğrulanmadı — yalnızca
+  routing/auth-kapısı (307) + yerel demo-modu e2e paketi (15/15) kanıt.
+
+**Kalan işler (bu oturumun kapsamı dışında bırakıldı, öncelik sırasıyla):**
+1. **CI yok** (§10 madde 15, ORTA öncelik) — `.github/workflows/` altında
+   `npm test` + `npx tsc --noEmit` + `npm run lint` çalıştıran bir GitHub
+   Actions pipeline'ı eklenmeli. Kod değişikliği değil, altyapı kararı;
+   ayrı bir onay/oturum gerektirir.
+2. **`/api/cron/tokens` rotası yazılmadı** (§10 madde 14, Instagram'a bağlı) —
+   `sm-token-refresh` job'ı bunun için zaten kurulu ve BİLİNÇLİ OLARAK
+   pasif. Adım 16/17b (Instagram) canlı olmadan yazılmasının/aktive
+   edilmesinin anlamı yok.
+3. **`rate_limit_counters`'ta orphan satırlar** (güvenlik değil, temizlik) —
+   silinmiş test markalarına ait sayaç satırları hiç temizlenmiyor
+   (`docs/KALIBRASYON.md` §4). Retention job'ı düşünülebilir, aciliyeti yok.
+4. **16/17b Instagram** ve **adım 22 diğer platformlar** (X/LinkedIn/TikTok)
+   — BIRLESIM_PLANI'nin kendi sıralamasında bu adımdan SONRA geliyor,
+   bu oturumun kapsamında değil.
+
+**Kapanış durumu**: 16/16 madde denetlendi (12 KAPALI, 2 KAPALI/MOOT, 1
+bilinçli erteleme, 1 gerçek açık — CI). Faz C'nin dört alt başlığının
+hepsi çalıştırılmış kanıtla KAPALI. 5 kapı + e2e yeşil. Üretime deploy
+edildi, cron durumu deploy öncesi/sonrası birebir aynı doğrulandı.
