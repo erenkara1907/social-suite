@@ -5,6 +5,7 @@ import { getJobsSummary } from "@/lib/server/jobs/status";
 import { buildChains, buildMonthCells, buildWeek } from "@/lib/core/derive/calendar";
 import { skeletonToContentItems } from "@/lib/core/plan/calendar";
 import { brandCompletionPercent } from "@/lib/core/brand/types";
+import { buildFeedbackSignal, FEEDBACK_WINDOW_DAYS, toFeedbackPromptBlock } from "@/lib/core/insights/build-feedback";
 import type { PlanHorizon } from "@/lib/core/plan/types";
 import type { PostStatus } from "@/lib/core/types";
 import { PlanView } from "@/components/app/plan-view";
@@ -59,27 +60,38 @@ export default async function Page({
 
   const plannerPort = port("planner", overrides);
   const contentPort = port("content", overrides);
+  const metricsPort = port("metrics", overrides);
 
   const now = new Date();
-  const [skeletonResult, items, jobsSummary, ugcRequestedIds] = await Promise.all([
-    plannerPort.generate({
-      theme: brand.description || brand.name,
-      horizonDays,
-      // ⭐ adım 10 A1 — İÇERİK dili, brand.contentLanguage'dan. Arayüzün
-      // (localStorage `sm:lang`) SSR'ın bilemediği tercihi DEĞİL, markanın
-      // kendi alanı — bkz. docs/BIRLESIM_PLANI.md §9.1.
-      lang: brand.contentLanguage,
-      mode: "weekly",
-      start: now,
-      brand,
-      // ⭐ adım 14 FAZ C — canlı modda anahtar çözümü için gerekli
-      // (livePlanner.generate()). Demo modda okunmaz.
-      brandId: brand.id,
-    }),
+  // ⭐ adım 18 FAZ C — sinyal, `plannerPort.generate()`'in bir GİRDİSİ
+  // olduğu için önce (paralel) toplanır; `insightBlock` hazır olmadan
+  // önizleme çağrısı yapılamaz — C5'in "her ziyaret gerçek çağrı" maliyet
+  // notu bu yüzden bir round-trip daha uzuyor, kabul edilebilir bir bedel.
+  const [items, latestMetrics, jobsSummary, ugcRequestedIds] = await Promise.all([
     contentPort.list(),
+    metricsPort.latest(FEEDBACK_WINDOW_DAYS),
     getJobsSummary(),
     contentPort.listUgcRequested(),
   ]);
+
+  const feedbackSignal = buildFeedbackSignal(items, latestMetrics, brand.timezone);
+  const insightBlock = toFeedbackPromptBlock(feedbackSignal);
+
+  const skeletonResult = await plannerPort.generate({
+    theme: brand.description || brand.name,
+    horizonDays,
+    // ⭐ adım 10 A1 — İÇERİK dili, brand.contentLanguage'dan. Arayüzün
+    // (localStorage `sm:lang`) SSR'ın bilemediği tercihi DEĞİL, markanın
+    // kendi alanı — bkz. docs/BIRLESIM_PLANI.md §9.1.
+    lang: brand.contentLanguage,
+    mode: "weekly",
+    start: now,
+    brand,
+    // ⭐ adım 14 FAZ C — canlı modda anahtar çözümü için gerekli
+    // (livePlanner.generate()). Demo modda okunmaz.
+    brandId: brand.id,
+    insightBlock,
+  });
 
   // ⭐ §9.1 "sessiz düşme" değil — üretim gerçekten başarısızsa boş bir plan
   // gösterilir, sahte bir tane DEĞİL. Demo modda bu dal pratikte hiç girilmez.
@@ -120,6 +132,7 @@ export default async function Page({
       defaultTheme={brand.description || brand.name}
       contentLanguage={brand.contentLanguage}
       jobsSummary={jobsSummary}
+      feedbackSignal={feedbackSignal}
     />
   );
 }

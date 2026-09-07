@@ -64,6 +64,13 @@ export interface SkeletonInput {
    *  yalnızca `lib/adapters/live/planner.ts`'in anahtar çözümü + kullanım
    *  kaydı için taşır. Demo modda okunmaz. */
   brandId?: string;
+  /** ⭐ adım 18 FAZ C — `lib/core/insights/build-feedback.ts`'in
+   *  `toFeedbackPromptBlock()`'u. Boş dize/`null`/`undefined` iken prompt'a
+   *  HİÇ eklenmez (§8.3: "sinyal yoksa prompt eskisi gibi çalışsın"). Metin
+   *  yalnızca YAKLAŞIM taşır (format/saat/açılış biçimi), KONU taşımaz —
+   *  dedupe motoruyla çakışmasın diye (`build-feedback.ts`'in kendi
+   *  başlığı). */
+  insightBlock?: string | null;
 }
 
 export type SkeletonOutcome = ProviderCallOutcome<{ title: string; posts: SkeletonPost[] }>;
@@ -134,6 +141,8 @@ function header(input: SkeletonInput): string[] {
     `Write every title and hook in ${input.lang === "tr" ? "Turkish" : "English"}.`,
     "",
     ...(brandBlock ? [brandBlock, ""] : []),
+    // ⭐ adım 18 FAZ C — boş/undefined iken hiçbir satır eklenmez (§8.3).
+    ...(input.insightBlock ? [input.insightBlock, ""] : []),
     "The theme to plan around:",
     input.theme,
   ];

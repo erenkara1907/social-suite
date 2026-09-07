@@ -75,6 +75,46 @@ describe("planSkeleton — weekly mod", () => {
     expect(userText).toContain("Kahve Durağı");
   });
 
+  it("⭐ adım 18 FAZ C — insightBlock verilince PROMPT'A GİRER (tam metin kanıtı)", async () => {
+    createMock.mockResolvedValue(
+      textMessage(JSON.stringify({ title: "T", posts: [{ slot: 0, title: "T", hook: "H" }] })),
+    );
+
+    await planSkeleton(
+      {
+        theme: "kahve dükkanı yeni menü",
+        horizonDays: 7,
+        lang: "tr",
+        mode: "weekly",
+        start: START,
+        brand: { name: "Kahve Durağı", industry: "", description: "Kadıköy'de kahveci", products: "", audience: "", voice: "", keywords: "", links: "" },
+        insightBlock: "What worked in recent published content — apply the APPROACH, not the topic:\n- Shorter opening lines (hooks) got more engagement.",
+      },
+      FAKE_CREDENTIAL,
+      MODEL,
+    );
+
+    const userText = createMock.mock.calls[0][0].messages[0].content as string;
+    console.log("[adım 18 FAZ C — TAM PROMPT METNİ]\n" + userText);
+    expect(userText).toContain("apply the APPROACH, not the topic");
+    expect(userText).toContain("Shorter opening lines (hooks) got more engagement.");
+  });
+
+  it("⭐ adım 18 FAZ C — insightBlock YOKSA/boşsa prompt eskisi gibi TEMİZ kalır", async () => {
+    createMock.mockResolvedValue(
+      textMessage(JSON.stringify({ title: "T", posts: [{ slot: 0, title: "T", hook: "H" }] })),
+    );
+
+    await planSkeleton(
+      { theme: "tema", horizonDays: 7, lang: "tr", mode: "weekly", start: START, brand: null, insightBlock: "" },
+      FAKE_CREDENTIAL,
+      MODEL,
+    );
+
+    const userText = createMock.mock.calls[0][0].messages[0].content as string;
+    expect(userText).not.toContain("APPROACH");
+  });
+
   it("iyi biçimli yanıtı ayrıştırır — her slot doldurulur", async () => {
     createMock.mockResolvedValue(
       textMessage(

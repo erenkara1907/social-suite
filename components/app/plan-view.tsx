@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { CONTENT_LANGUAGE_LABEL, PLATFORM_META, type ContentItemRow, type Lang } from "@/lib/core/types";
 import type { buildMonthCells, buildWeek } from "@/lib/core/derive/calendar";
 import type { PlanHorizon } from "@/lib/core/plan/types";
+import type { FeedbackSignal } from "@/lib/core/insights/build-feedback";
 import { AI_ERROR_COPY } from "@/lib/core/ai/error-copy";
 import {
   generatePlanAction, requestUgcAction,
@@ -348,6 +349,42 @@ function UgcSelectionCard({ items, demoMode }: { items: ContentItemRow[]; demoMo
   );
 }
 
+/**
+ * ⭐ adım 18 FAZ C3 — "sonraki plan şu sinyalleri kullanacak" şeffaflığı.
+ * Sinyal `null` (yetersiz veri, `FEEDBACK_MIN_MEASURED` altı) iken de
+ * gösterilir — dürüstçe "henüz yok" demek de şeffaflığın parçası, kart
+ * sessizce KAYBOLMAZ (D11: bir şey ölçülemiyorsa bunu SÖYLE, sakla değil).
+ */
+function FeedbackSignalCard({ signal }: { signal: FeedbackSignal | null }) {
+  const { t, ui } = useLang();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon name="sparkles" className="h-4 w-4 text-primary" />
+          {ui.planFeedbackTitle}
+        </CardTitle>
+        {signal && signal.notes.length > 0 && <CardDescription>{ui.planFeedbackHint}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        {signal && signal.notes.length > 0 ? (
+          <ul className="space-y-1.5 text-sm">
+            {signal.notes.map((note, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <Icon name="trending-up" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                <span>{t(note.text)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">{ui.planFeedbackEmpty}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function PlanView({
   horizonDays,
   planTitle,
@@ -362,6 +399,7 @@ export function PlanView({
   defaultTheme,
   contentLanguage,
   jobsSummary,
+  feedbackSignal,
 }: {
   horizonDays: PlanHorizon;
   planTitle: string;
@@ -387,6 +425,9 @@ export function PlanView({
   /** adım 14 FAZ D — "Planı üret" kuyruğa eklendikten sonra kullanıcının
    *  takip edeceği panel (adım 12'nin `/queue`'daki paneliyle aynı bileşen). */
   jobsSummary: JobsSummary;
+  /** adım 18 FAZ C3 — bir sonraki `plan_generate` çağrısının kullanacağı
+   *  geri besleme; yetersiz veri varken `null`. */
+  feedbackSignal: FeedbackSignal | null;
 }) {
   const { ui } = useLang();
 
@@ -413,6 +454,8 @@ export function PlanView({
       />
 
       {!generateDisabled && <JobsQueueStatus summary={jobsSummary} />}
+
+      <FeedbackSignalCard signal={feedbackSignal} />
 
       <Card>
         <CardContent className="pt-5">

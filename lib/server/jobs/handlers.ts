@@ -12,6 +12,10 @@ import { toPromptBlock } from "@/lib/core/brand/types";
 import { skeletonToContentItems } from "@/lib/core/plan/calendar";
 import { createDedupeRunBudget, runDedupeCheck } from "@/lib/server/dedupe/run";
 import { getBrandForJob } from "@/lib/server/jobs/context";
+import {
+  buildFeedbackSignal, FEEDBACK_WINDOW_DAYS, toFeedbackPromptBlock, type FeedbackSignal,
+} from "@/lib/core/insights/build-feedback";
+import type { ContentItemRow, EngagementRateBasis, MetricRow, MetricTier } from "@/lib/core/types";
 import { publishContentItem } from "@/lib/server/publish/publish-item";
 import { runAnthropicCall } from "@/lib/server/ai/run-provider-call";
 import { runUgcPipelineStep } from "@/lib/server/media/pipeline";
@@ -47,6 +51,56 @@ function toJobError(code: ApiErrorCode, detail: string | undefined, fallback: st
   }
 }
 
+const FEEDBACK_CONTENT_COLUMNS =
+  "id,brand_id,plan_id,channel_id,platform,kind,media_type,day_offset,time_of_day,scheduled_at," +
+  "published_at,is_best_time,title,hook,body,hashtags,media_url,status,external_post_id," +
+  "parent_id,root_id,chain_position,continuation_note,content_fingerprint,topic_key";
+
+interface BrandLatestMetricsRow {
+  content_item_id: string;
+  tier: MetricTier;
+  collected_at: string;
+  reach: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  engagement_rate: number;
+  engagement_rate_basis: EngagementRateBasis;
+}
+
+/**
+ * ⭐ adım 18 FAZ C — §8.3'ün geri besleme girdisi: markanın yayınlanmış
+ * içerikleri + D1'in TEK okuma kaynağı (`brand_latest_metrics()`, `/analytics`
+ * ile AYNI SQL fonksiyonu — ikinci bir "en son ölçüm" kopyası YAZILMAZ).
+ * Sorgu hatası TransientJobError — bir sonraki denemede düzelebilir
+ * (geçici bir DB sorunu); veri YOK'sa (yeni marka) boş dizi döner, hata
+ * DEĞİL — `buildFeedbackSignal` zaten eşik altı veriyi `null` ile ele alıyor.
+ */
+async function loadFeedbackInputs(
+  admin: ReturnType<typeof createAdminClient>,
+  brandId: string,
+): Promise<{ items: ContentItemRow[]; metrics: MetricRow[] }> {
+  const { data: items, error: itemsError } = await admin
+    .from("content_items")
+    .select(FEEDBACK_CONTENT_COLUMNS)
+    .eq("brand_id", brandId)
+    .eq("status", "published")
+    .returns<ContentItemRow[]>();
+  if (itemsError) throw new TransientJobError(`content_items okunamadı (geri besleme): ${itemsError.message}`);
+
+  const { data: metricRows, error: metricsError } = await admin
+    .rpc("brand_latest_metrics", { p_brand_id: brandId, p_days: FEEDBACK_WINDOW_DAYS });
+  if (metricsError) throw new TransientJobError(`brand_latest_metrics başarısız (geri besleme): ${metricsError.message}`);
+
+  const metrics: MetricRow[] = ((metricRows ?? []) as BrandLatestMetricsRow[]).map((r) => ({
+    content_item_id: r.content_item_id, reach: r.reach, likes: r.likes, comments: r.comments, shares: r.shares,
+    engagement_rate: Number(r.engagement_rate), engagement_rate_basis: r.engagement_rate_basis,
+    tier: r.tier, collected_at: r.collected_at,
+  }));
+
+  return { items: items ?? [], metrics };
+}
+
 /** BIRLESIM_PLANI §4a durum makinesi — `plan_generate`'in yazdığı satırlar
  *  hep `idea`'da doğar, gövdesi `caption_write`'ın işi. */
 async function handlePlanGenerate(
@@ -61,11 +115,20 @@ async function handlePlanGenerate(
   const model = AI_JOB_MODELS.plan_generate;
   const start = new Date(payload.startIso);
 
+  // ⭐ adım 18 FAZ C — geri besleme sinyali; yetersiz veri varsa `null`,
+  // prompt'a HİÇ bölüm eklenmez (toFeedbackPromptBlock'un kendi kuralı).
+  const { items: feedbackItems, metrics: feedbackMetrics } = await loadFeedbackInputs(admin, ctx.brandId);
+  const feedbackSignal: FeedbackSignal | null = buildFeedbackSignal(feedbackItems, feedbackMetrics, brand.timezone);
+  const insightBlock = toFeedbackPromptBlock(feedbackSignal);
+
   const outcome = await runAnthropicCall(
     { brandId: ctx.brandId, kind: "plan_generate", model, jobId: ctx.jobId },
     (apiKey) =>
       planSkeleton(
-        { theme: payload.theme, horizonDays: payload.horizonDays, lang: payload.lang, mode: payload.mode, start, brand },
+        {
+          theme: payload.theme, horizonDays: payload.horizonDays, lang: payload.lang, mode: payload.mode,
+          start, brand, insightBlock,
+        },
         apiKey,
         model,
       ),
@@ -84,6 +147,8 @@ async function handlePlanGenerate(
       lang: payload.lang,
       start_date: payload.startIso.slice(0, 10),
       mode: payload.mode,
+      // ⭐ §8.3 — "kullanılan analiz" izlenebilirliği. Sinyal yoksa `null`.
+      insight_snapshot: feedbackSignal,
     })
     .select("id")
     .single<{ id: string }>();
