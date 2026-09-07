@@ -38,6 +38,24 @@ export function canPublish(platform: Platform): boolean {
  */
 export const CREDENTIAL_CONNECT_PLATFORMS: Platform[] = ["bluesky"];
 
+/**
+ * ⭐ adım 18 — hangi platformlar `content_metrics.reach`'i GERÇEKTEN
+ * doldurabiliyor. `docs/ADIM_18_RAPOR.md` §A1: AT Protocol'ün gönderi
+ * metriği (`app.bsky.feed.getPosts` → `PostView.likeCount/replyCount/
+ * repostCount/quoteCount`) hiçbir erişim/gösterim alanı VERMİYOR — Instagram
+ * Graph Insights'ın `reach`/`impressions`'ının Bluesky karşılığı yok, "0"
+ * yazmak "ölçüldü ve sıfır çıktı" ile karışır. `/analytics`/`/dashboard` bu
+ * listeyi sorgulayıp erişim kartını dürüstçe "bu platform vermiyor" mu,
+ * yoksa gerçek bir sayı mı gösterdiğine karar verir — toplayıcı da
+ * `content_metrics.engagement_rate` formülünü buna göre seçer (bkz.
+ * `lib/server/metrics/collect.ts` başlığı).
+ */
+export const PLATFORMS_WITHOUT_REACH: Platform[] = ["bluesky"];
+
+export function platformProvidesReach(platform: Platform): boolean {
+  return !PLATFORMS_WITHOUT_REACH.includes(platform);
+}
+
 /** Statuses that mean "this is expected to go out on its own". */
 export const AUTOMATED_STATUSES = ["scheduled", "published"] as const;
 

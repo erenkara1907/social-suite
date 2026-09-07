@@ -16,6 +16,7 @@ import { publishContentItem } from "@/lib/server/publish/publish-item";
 import { runAnthropicCall } from "@/lib/server/ai/run-provider-call";
 import { runUgcPipelineStep } from "@/lib/server/media/pipeline";
 import { pollMediaJob } from "@/lib/server/media/poll";
+import { collectContentMetrics } from "@/lib/server/metrics/collect";
 
 /**
  * İşleyici kaydı — BIRLESIM_PLANI §12 adım 14 FAZ C.
@@ -292,8 +293,16 @@ export const JOB_HANDLERS: {
   ugc_pipeline: runUgcPipelineStep,
   media_poll: pollMediaJob,
   publish: handlePublish,
-  async metrics_collect() {
-    throw new PermanentJobError(NOT_IMPLEMENTED);
+  /** İnce sarmalayıcı — asıl mantık `lib/server/metrics/collect.ts`'te
+   *  (§12 adım 18 FAZ A2), `handlePublish`'in DRY deseninin aynısı.
+   *  ⚠ `contentItemId` payload'da OPSİYONEL (bkz. `MetricsCollectPayload`
+   *  — "verilmezse markanın tüm satırları taranır") ama BU adımın tarayıcısı
+   *  (`app/api/cron/metrics/route.ts`) her zaman `publish` GRANÜLERLİĞİNDE,
+   *  tek bir içerik id'siyle iş açıyor — brand-geneli tarama YAZILMADI. */
+  async metrics_collect(payload) {
+    if (!payload.contentItemId) throw new PermanentJobError("metrics_collect: contentItemId zorunlu (bu adımda brand-geneli tarama yok)");
+    const admin = createAdminClient();
+    await collectContentMetrics(admin, payload.contentItemId);
   },
   async token_refresh() {
     throw new PermanentJobError(NOT_IMPLEMENTED);

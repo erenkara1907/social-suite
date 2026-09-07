@@ -224,6 +224,109 @@ export async function publishBlueskyPost(input: BlueskyPostInput): Promise<Blues
   }
 }
 
+/* ── adım 18 — metrik okuma ───────────────────────────────────────────────
+ * Doğrulanmış kaynak: `app.bsky.feed.getPosts` resmi lexicon'u
+ * (github.com/bluesky-social/atproto/blob/main/lexicons/app/bsky/feed/
+ * getPosts.json — `uris` en fazla 25 eleman) ve `@atproto/api`'nin ÜRETİLMİŞ
+ * tipleri (`node_modules/@atproto/api/dist/client/types/app/bsky/feed/
+ * defs.d.ts` — `PostView.likeCount/replyCount/repostCount/quoteCount/
+ * indexedAt`). Bluesky'nin verdiği TEK ŞEY bunlar — Instagram Insights'ın
+ * `reach`/`impressions`'ının BİR KARŞILIĞI YOK (bkz. `lib/core/publishing.ts`
+ * `PLATFORMS_WITHOUT_REACH`).
+ *
+ * ⚠ Silinmiş/erişilemeyen bir gönderinin URI'si `getPosts`'un döndürdüğü
+ * dizide HİÇ GÖRÜNMEZ — resmi lexicon bunu belgelemiyor, davranış topluluk
+ * kaynaklarından doğrulandı (bkz. `docs/ADIM_18_RAPOR.md` §A1); sunucu HATA
+ * FIRLATMAZ, yalnızca o URI'yi atlar. Çağıran (`lib/server/metrics/
+ * collect.ts`) bunu "bul(a)madım" olarak ele almalı, iş hatası SAYMAMALI. */
+
+const MAX_GET_POSTS_URIS = 25;
+
+export interface BlueskyPostMetrics {
+  uri: string;
+  likeCount: number;
+  replyCount: number;
+  repostCount: number;
+  quoteCount: number;
+  indexedAt: string;
+}
+
+export type BlueskyPostMetricsResult =
+  | { ok: true; posts: BlueskyPostMetrics[] }
+  | { ok: false; error: string };
+
+/**
+ * `com.atproto.repo.putRecord`'un aksine bu bir OKUMA — kimlik doğrulama
+ * gerekmiyor gibi görünse de (AppView genel okumaya izin verir), oturumla
+ * çağırmak diğer tüm fonksiyonlarla AYNI istemci kurulumunu paylaşmayı
+ * sağlıyor; ayrıca askıya alınmış/bloklu hesap durumlarında oturumlu istek
+ * daha tutarlı davranıyor.
+ *
+ * Dönen dizi GİRDİYLE AYNI SIRADA/UZUNLUKTA OLMAYABİLİR — bulunamayan URI'ler
+ * sessizce eksik. Çağıran eşleştirmeyi `uri` alanına göre yapmalı.
+ */
+export async function getBlueskyPostMetrics(
+  session: BlueskySession,
+  uris: string[],
+): Promise<BlueskyPostMetricsResult> {
+  if (uris.length === 0) return { ok: true, posts: [] };
+  if (uris.length > MAX_GET_POSTS_URIS) {
+    return { ok: false, error: `getPosts tek çağrıda en fazla ${MAX_GET_POSTS_URIS} uri kabul eder (${uris.length} verildi)` };
+  }
+  const credentialSession = new CredentialSession(new URL(BLUESKY_SERVICE_URL));
+  credentialSession.session = { ...session, active: true };
+  const agent = new Agent(credentialSession);
+  try {
+    const result = await agent.app.bsky.feed.getPosts({ uris });
+    const posts: BlueskyPostMetrics[] = result.data.posts.map((p) => ({
+      uri: p.uri,
+      likeCount: p.likeCount ?? 0,
+      replyCount: p.replyCount ?? 0,
+      repostCount: p.repostCount ?? 0,
+      quoteCount: p.quoteCount ?? 0,
+      indexedAt: p.indexedAt,
+    }));
+    return { ok: true, posts };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+}
+
+export interface BlueskyProfileStats {
+  followersCount: number;
+  followsCount: number;
+  postsCount: number;
+}
+
+export type BlueskyProfileStatsResult =
+  | { ok: true; stats: BlueskyProfileStats }
+  | { ok: false; error: string };
+
+/**
+ * Kanal düzeyi sayaçlar (§4f "Kanal düzeyi") — `app.bsky.actor.getProfile`,
+ * doğrulanmış (`@atproto/api` `defs.d.ts` `ProfileViewDetailed.
+ * followersCount/followsCount/postsCount`). `session.did` kendi hesabımız —
+ * `actor` parametresi handle veya DID kabul ediyor, DID her zaman geçerli.
+ */
+export async function getBlueskyProfileStats(session: BlueskySession): Promise<BlueskyProfileStatsResult> {
+  const credentialSession = new CredentialSession(new URL(BLUESKY_SERVICE_URL));
+  credentialSession.session = { ...session, active: true };
+  const agent = new Agent(credentialSession);
+  try {
+    const result = await agent.app.bsky.actor.getProfile({ actor: session.did });
+    return {
+      ok: true,
+      stats: {
+        followersCount: result.data.followersCount ?? 0,
+        followsCount: result.data.followsCount ?? 0,
+        postsCount: result.data.postsCount ?? 0,
+      },
+    };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+}
+
 /**
  * Sunucudaki oturumu iptal eder (`com.atproto.server.deleteSession`) —
  * disconnect akışında `channel_credentials` satırı silinmeden ÖNCE

@@ -47,24 +47,45 @@ const H6_SHARE = 0.35;
 /** d1 ölçümü oturmuş sayının ~%88'i; `final` kalanı kapatıyor. */
 const D1_SHARE = 0.88;
 
+/** ⭐ adım 18 — `reach × engagement_rate`'ten türetilen tutarlı ham sayılar
+ *  (Instagram varsayımıyla): toplam etkileşimin kabaca %60'ı beğeni, %25'i
+ *  yorum, %15'i paylaşım. Demo verisi bu üçünü de taşımıyordu (`MetricRow`
+ *  yalnızca `reach`/`engagement_rate` içeriyordu) — Bluesky'nin gerçek
+ *  toplayıcısı bunları GERÇEKTEN dolduruyor (`lib/server/metrics/collect.ts`),
+ *  demo fixture'ı da aynı şekle uymalı ki `/analytics`'in ham sayı gösteren
+ *  kısımları demo modda da anlamlı görünsün. */
+function engagementSplit(reach: number, engagementRate: number) {
+  const total = Math.round((reach * engagementRate) / 100);
+  const likes = Math.round(total * 0.6);
+  const comments = Math.round(total * 0.25);
+  const shares = Math.max(0, total - likes - comments);
+  return { likes, comments, shares };
+}
+
 export function demoMetricRows(now: Date): MetricRow[] {
   const rows: MetricRow[] = [];
 
   for (const [suffix, publishedOffset, reach, engagement, hasFinal] of SERIES) {
     const contentItemId = `${CONTENT_ID_PREFIX}${suffix}`;
 
+    const h6Reach = Math.round(reach * H6_SHARE);
+    const h6Engagement = Number((engagement * 0.7).toFixed(2));
     rows.push({
       content_item_id: contentItemId,
-      reach: Math.round(reach * H6_SHARE),
-      engagement_rate: Number((engagement * 0.7).toFixed(2)),
+      reach: h6Reach,
+      ...engagementSplit(h6Reach, h6Engagement),
+      engagement_rate: h6Engagement,
       tier: "h6",
       collected_at: at(now, publishedOffset, "23:00"),
     });
 
+    const d1Reach = hasFinal ? Math.round(reach * D1_SHARE) : reach;
+    const d1Engagement = Number((hasFinal ? engagement * 0.95 : engagement).toFixed(2));
     rows.push({
       content_item_id: contentItemId,
-      reach: hasFinal ? Math.round(reach * D1_SHARE) : reach,
-      engagement_rate: Number((hasFinal ? engagement * 0.95 : engagement).toFixed(2)),
+      reach: d1Reach,
+      ...engagementSplit(d1Reach, d1Engagement),
+      engagement_rate: d1Engagement,
       tier: "d1",
       collected_at: at(now, publishedOffset + 1, "06:00"),
     });
@@ -73,6 +94,7 @@ export function demoMetricRows(now: Date): MetricRow[] {
       rows.push({
         content_item_id: contentItemId,
         reach,
+        ...engagementSplit(reach, engagement),
         engagement_rate: engagement,
         tier: "final",
         collected_at: at(now, publishedOffset + 30, "06:00"),

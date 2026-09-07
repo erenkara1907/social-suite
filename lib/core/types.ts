@@ -353,9 +353,21 @@ export interface ChannelRow {
   last_synced_at: string | null;
 }
 
+/**
+ * ⭐ adım 18 — `likes`/`comments`/`shares` eklendi. Önceki hâli yalnızca
+ * `reach`/`engagement_rate` taşıyordu (Instagram-öncelikli varsayım);
+ * Bluesky erişim VERMİYOR ama beğeni/yanıt/repost veriyor (`docs/
+ * ADIM_18_RAPOR.md` §A1) — bu üçü olmadan `/analytics` Bluesky için
+ * gösterecek hiçbir ham sayı bulamazdı. Bir platform bir alanı
+ * doldurmuyorsa değeri `0` — bu "ölçülmedi" ile "sıfır etkileşim" arasını
+ * AYIRT ETMEZ; o ayrım `lib/core/publishing.ts`'in `platformProvidesReach()`
+ * gibi platform-düzeyi bir sorguyla yapılır, bu satırın kendisiyle değil. */
 export interface MetricRow {
   content_item_id: string;
   reach: number;
+  likes: number;
+  comments: number;
+  shares: number;
   engagement_rate: number;
   tier: MetricTier;
   collected_at: string;
