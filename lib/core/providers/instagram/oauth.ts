@@ -1,0 +1,179 @@
+/**
+ * ← siraya/lib/instagram/oauth.ts
+ *
+ * UYARLAMA (§12 adım 16 FAZ A, §8.6):
+ *  - `INSTAGRAM_APP_ID`/`INSTAGRAM_APP_SECRET`/`redirectUri()` importları
+ *    KALDIRILDI; her fonksiyon artık ilk parametre olarak bir
+ *    `InstagramConfig` (`./config`) alıyor.
+ *  - Hata modeli DEĞİŞTİ: kaynak `throw new Error(...)` kullanıyordu; bu
+ *    dosya `lib/core/providers/bluesky.ts`'in `{ ok:true, ... } | { ok:false,
+ *    error }` desenine taşındı — `lib/core` genelinde tutarlılık için
+ *    (bluesky.ts başlığı: "başarılı dönüş ZATEN doğrulanmış demek"). Orijinal
+ *    hata mesajları (`readJson`'ın Meta-özel "200 ve hata gövdesi" ayrıştırması
+ *    dahil) BİREBİR korundu, yalnızca `throw` yerine `{ ok:false, error }`
+ *    dönüyor.
+ *  - Kaynak yorumları (satır satır, İngilizce) KORUNDU.
+ */
+import { graphHost, LONG_LIVED_URL, OAUTH_AUTHORIZE_URL, OAUTH_TOKEN_URL, REFRESH_URL, SCOPES, type InstagramConfig } from "./config";
+
+export interface InstagramProfile {
+  user_id: string;
+  username: string;
+  account_type?: string;
+  followers_count?: number;
+}
+
+export interface LongLivedToken {
+  accessToken: string;
+  expiresAt: Date;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "bilinmeyen hata";
+}
+
+/** Meta answers errors with 200-and-a-body as often as with a 4xx. Check both. */
+async function readJson(response: Response, context: string): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; error: string }> {
+  const text = await response.text();
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { ok: false, error: `${context}: Instagram returned a non-JSON response (${response.status}): ${text.slice(0, 200)}` };
+  }
+
+  const error = body.error as { message?: string; code?: number } | undefined;
+  if (error?.message) return { ok: false, error: `${context}: ${error.message}` };
+  if (typeof body.error_message === "string") return { ok: false, error: `${context}: ${body.error_message}` };
+  if (!response.ok) return { ok: false, error: `${context}: HTTP ${response.status} — ${text.slice(0, 200)}` };
+
+  return { ok: true, body };
+}
+
+/** Step 1 — where we send the user to grant access. */
+export function authorizeUrl(config: InstagramConfig, state: string): string {
+  const params = new URLSearchParams({
+    client_id: config.appId,
+    redirect_uri: config.redirectUri,
+    response_type: "code",
+    scope: SCOPES.join(","),
+    state,
+  });
+  return `${OAUTH_AUTHORIZE_URL}?${params}`;
+}
+
+export type ExchangeCodeResult = { ok: true; shortToken: string; userId: string } | { ok: false; error: string };
+
+/** Step 2 — the code is single-use and expires in an hour. */
+export async function exchangeCode(config: InstagramConfig, code: string): Promise<ExchangeCodeResult> {
+  let response: Response;
+  try {
+    response = await fetch(OAUTH_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: config.appId,
+        client_secret: config.appSecret,
+        grant_type: "authorization_code",
+        redirect_uri: config.redirectUri,
+        code,
+      }),
+    });
+  } catch (error) {
+    return { ok: false, error: `Code exchange failed: ${errorMessage(error)}` };
+  }
+
+  const parsed = await readJson(response, "Code exchange failed");
+  if (!parsed.ok) return parsed;
+
+  const shortToken = parsed.body.access_token as string | undefined;
+  const userId = parsed.body.user_id;
+
+  if (!shortToken) return { ok: false, error: "Code exchange failed: no access_token in the response." };
+  return { ok: true, shortToken, userId: String(userId ?? "") };
+}
+
+export type LongLivedTokenResult = { ok: true; token: LongLivedToken } | { ok: false; error: string };
+
+function toToken(body: Record<string, unknown>, context: string): LongLivedTokenResult {
+  const accessToken = body.access_token as string | undefined;
+  const expiresIn = Number(body.expires_in ?? 0);
+
+  if (!accessToken) return { ok: false, error: `${context}: no access_token in the response.` };
+
+  return {
+    ok: true,
+    token: {
+      accessToken,
+      expiresAt: new Date(Date.now() + (expiresIn || 60 * 24 * 3600) * 1000),
+    },
+  };
+}
+
+/** Step 3 — swap the ~1 hour token for the 60 day one. */
+export async function exchangeForLongLived(config: InstagramConfig, shortToken: string): Promise<LongLivedTokenResult> {
+  const params = new URLSearchParams({
+    grant_type: "ig_exchange_token",
+    client_secret: config.appSecret,
+    access_token: shortToken,
+  });
+
+  let response: Response;
+  try {
+    response = await fetch(`${LONG_LIVED_URL}?${params}`);
+  } catch (error) {
+    return { ok: false, error: `Long-lived token exchange failed: ${errorMessage(error)}` };
+  }
+
+  const parsed = await readJson(response, "Long-lived token exchange failed");
+  if (!parsed.ok) return parsed;
+  return toToken(parsed.body, "Long-lived token exchange failed");
+}
+
+/** Step 4 — must be at least 24h old and not yet expired. */
+export async function refreshLongLived(config: InstagramConfig, token: string): Promise<LongLivedTokenResult> {
+  const params = new URLSearchParams({ grant_type: "ig_refresh_token", access_token: token });
+
+  let response: Response;
+  try {
+    response = await fetch(`${REFRESH_URL}?${params}`);
+  } catch (error) {
+    return { ok: false, error: `Token refresh failed: ${errorMessage(error)}` };
+  }
+
+  const parsed = await readJson(response, "Token refresh failed");
+  if (!parsed.ok) return parsed;
+  return toToken(parsed.body, "Token refresh failed");
+}
+
+export type ProfileResult = { ok: true; profile: InstagramProfile } | { ok: false; error: string };
+
+/** Who did we just connect? Used to name the channel. */
+export async function fetchProfile(config: InstagramConfig, accessToken: string): Promise<ProfileResult> {
+  const params = new URLSearchParams({
+    fields: "user_id,username,account_type,followers_count",
+    access_token: accessToken,
+  });
+
+  let response: Response;
+  try {
+    response = await fetch(`${graphHost(config)}/me?${params}`);
+  } catch (error) {
+    return { ok: false, error: `Profile lookup failed: ${errorMessage(error)}` };
+  }
+
+  const parsed = await readJson(response, "Profile lookup failed");
+  if (!parsed.ok) return parsed;
+  const body = parsed.body;
+
+  return {
+    ok: true,
+    profile: {
+      user_id: String(body.user_id ?? body.id ?? ""),
+      username: String(body.username ?? ""),
+      account_type: body.account_type as string | undefined,
+      followers_count: typeof body.followers_count === "number" ? body.followers_count : undefined,
+    },
+  };
+}
