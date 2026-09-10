@@ -95,14 +95,16 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
   const config = resolved.config;
   // ⚠ Gizli değil: appId ve redirect_uri Meta panelinde zaten açık.
-  // app_secret'ın KENDİSİ loglanmıyor — yalnızca uzunluğu ve tek yönlü
-  // SHA256 hash'i (Vercel'deki değerin .env.local ile BİREBİR aynı olup
-  // olmadığını, secret'ı hiç ifşa etmeden doğrulamak için).
-  const secretHash = createHash("sha256").update(config.appSecret).digest("hex");
+  // app_secret'ın KENDİSİ loglanmıyor. Otomatik güvenlik incelemesinin
+  // uyarısı üzerine: SHA256'nın TAMAMI değil yalnızca İLK 8 HEX KARAKTERİ
+  // (geri döndürülmesi pratikte imkansız), `secretLength` alanı KALDIRILDI —
+  // yalnızca "Vercel'deki değer .env.local ile aynı mı" sorusuna cevap verecek
+  // kadarı, arama uzayını daraltacak ek bilgi olmadan.
+  const secretFingerprint = createHash("sha256").update(config.appSecret).digest("hex").slice(0, 8);
   console.info(
     `[instagram-oauth][callback] resolveInstagramConfig tamam: appId="${config.appId}" ` +
     `redirect_uri="${config.redirectUri}" apiVersion="${config.apiVersion}" ` +
-    `secretLength=${config.appSecret.length} secretSha256=${secretHash}`,
+    `secretFingerprint=${secretFingerprint}`,
   );
 
   const exchanged = await exchangeCode(config, code);
