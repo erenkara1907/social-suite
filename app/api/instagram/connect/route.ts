@@ -23,7 +23,7 @@ import { OAUTH_STATE_COOKIE } from "@/lib/core/providers/instagram/config";
  * connect">` — TAM SAYFA YÜKLEMESİ, `fetch`/Server Action DEĞİL.
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  console.info("[instagram-oauth][connect] başladı");
+  console.info(`[instagram-oauth][connect] başladı nodeVersion=${process.version} platform=${process.platform} arch=${process.arch}`);
 
   const overrides = await requestModeOverrides();
   const channelPort = port("channel", overrides);

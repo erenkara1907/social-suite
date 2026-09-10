@@ -54,7 +54,10 @@ function channelsRedirect(request: NextRequest, params: Record<string, string>):
 export async function GET(request: NextRequest): Promise<Response> {
   const codeParam = request.nextUrl.searchParams.get("code");
   const statePrefix = request.nextUrl.searchParams.get("state")?.slice(0, 8) ?? "(yok)";
-  console.info(`[instagram-oauth][callback] başladı: codePrefix="${codeParam?.slice(0, 8) ?? "(yok)"}" statePrefix="${statePrefix}"`);
+  console.info(
+    `[instagram-oauth][callback] başladı: codePrefix="${codeParam?.slice(0, 8) ?? "(yok)"}" statePrefix="${statePrefix}" ` +
+    `nodeVersion=${process.version}`,
+  );
 
   const store = await cookies();
   const savedState = store.get(OAUTH_STATE_COOKIE)?.value ?? null;
