@@ -120,6 +120,16 @@ export async function exchangeCode(config: InstagramConfig, code: string): Promi
     return { ok: false, error: `Code exchange failed: ${errorMessage(error)}` };
   }
 
+  // ⚠ Meta'nın önbellek/istek başlıkları — `cache: "no-store"` hipotezini
+  // KESİN doğrulamak için. `x-vercel-cache`/`age` "HIT" ya da sıfırdan farklı
+  // bir sayı gösterirse istek gerçekten Meta'ya GİTMEMİŞ demektir.
+  console.info(
+    `[instagram-oauth][exchangeCode] HTTP ${response.status} ` +
+    `x-vercel-cache="${response.headers.get("x-vercel-cache") ?? ""}" ` +
+    `age="${response.headers.get("age") ?? ""}" ` +
+    `x-cache="${response.headers.get("x-cache") ?? ""}"`,
+  );
+
   const parsed = await readJson(response, "Code exchange failed");
   if (!parsed.ok) return parsed;
 

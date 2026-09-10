@@ -25,6 +25,13 @@ import type { ChannelRow } from "@/lib/core/types";
  * ⚠ Token bu rotanın YANITINDA hiçbir zaman görünmez — yalnızca
  * `channel_credentials`'a (service-role, RLS açık + sıfır politika) yazılır,
  * kullanıcıya dönen tek şey bir `/channels?ig_connected=1` yönlendirmesi.
+ *
+ * ⭐ Her adım loglanıyor (`console.info`/`console.error`, önek
+ * `[instagram-oauth][callback]`) — `code`'un yalnızca İLK 8 KARAKTERİ, `state`
+ * için de aynı; tam değerler asla loglanmaz (tek kullanımlık, hassas).
+ * Loglara bakmak için: `vercel logs https://app-gold-one-92.vercel.app
+ * --since 10m` (terminalden) ya da Vercel Dashboard → proje → **Logs**
+ * sekmesi → arama kutusuna `instagram-oauth` yaz.
  */
 
 const CHANNEL_COLUMNS = "id,platform,handle,followers,growth,engagement,is_connected,last_synced_at";
@@ -36,6 +43,10 @@ function channelsRedirect(request: NextRequest, params: Record<string, string>):
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
+  const codeParam = request.nextUrl.searchParams.get("code");
+  const statePrefix = request.nextUrl.searchParams.get("state")?.slice(0, 8) ?? "(yok)";
+  console.info(`[instagram-oauth][callback] başladı: codePrefix="${codeParam?.slice(0, 8) ?? "(yok)"}" statePrefix="${statePrefix}"`);
+
   const store = await cookies();
   const savedState = store.get(OAUTH_STATE_COOKIE)?.value ?? null;
   // Tek kullanımlık — sonuç ne olursa olsun temizlenir (ikinci bir callback
@@ -46,6 +57,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   // `error_description` ile döner — kod hiç YOKTUR, exchange'e hiç girilmez.
   const metaError = request.nextUrl.searchParams.get("error_description") ?? request.nextUrl.searchParams.get("error");
   if (metaError) {
+    console.error(`[instagram-oauth][callback] Meta hata döndürdü (kullanıcı iptal etmiş olabilir): ${metaError}`);
     return channelsRedirect(request, { ig_error: metaError });
   }
 
@@ -53,23 +65,49 @@ export async function GET(request: NextRequest): Promise<Response> {
   const state = request.nextUrl.searchParams.get("state");
 
   if (!code || !state || !savedState || state !== savedState) {
+    console.error(
+      `[instagram-oauth][callback] CSRF/eksik parametre reddi: hasCode=${!!code} hasState=${!!state} ` +
+      `hasSavedState=${!!savedState} stateMatch=${state === savedState}`,
+    );
     return channelsRedirect(request, { ig_error: "geçersiz veya süresi dolmuş bağlanma isteği" });
   }
 
   const { user, brand } = await requireBrand();
+  console.info(`[instagram-oauth][callback] requireBrand tamam: brandId=${brand.id}`);
 
   const resolved = await resolveInstagramConfig(brand.id);
-  if (!resolved.ok) return channelsRedirect(request, { ig_error: resolved.error });
+  if (!resolved.ok) {
+    console.error(`[instagram-oauth][callback] resolveInstagramConfig başarısız: ${resolved.error}`);
+    return channelsRedirect(request, { ig_error: resolved.error });
+  }
   const config = resolved.config;
+  // ⚠ Gizli değil: appId ve redirect_uri Meta panelinde zaten açık.
+  // app_secret'ın KENDİSİ loglanmıyor, yalnızca dolu olup olmadığı.
+  console.info(
+    `[instagram-oauth][callback] resolveInstagramConfig tamam: appId="${config.appId}" ` +
+    `redirect_uri="${config.redirectUri}" apiVersion="${config.apiVersion}" hasSecret=${!!config.appSecret}`,
+  );
 
   const exchanged = await exchangeCode(config, code);
-  if (!exchanged.ok) return channelsRedirect(request, { ig_error: exchanged.error });
+  if (!exchanged.ok) {
+    console.error(`[instagram-oauth][callback] exchangeCode başarısız: ${exchanged.error}`);
+    return channelsRedirect(request, { ig_error: exchanged.error });
+  }
+  console.info(`[instagram-oauth][callback] exchangeCode tamam: userId="${exchanged.userId}"`);
 
   const longLived = await exchangeForLongLived(config, exchanged.shortToken);
-  if (!longLived.ok) return channelsRedirect(request, { ig_error: longLived.error });
+  if (!longLived.ok) {
+    console.error(`[instagram-oauth][callback] exchangeForLongLived başarısız: ${longLived.error}`);
+    return channelsRedirect(request, { ig_error: longLived.error });
+  }
+  console.info(`[instagram-oauth][callback] exchangeForLongLived tamam: expiresAt=${longLived.token.expiresAt.toISOString()}`);
 
   const profile = await fetchProfile(config, longLived.token.accessToken);
-  if (!profile.ok) return channelsRedirect(request, { ig_error: profile.error });
+  if (!profile.ok) {
+    console.error(`[instagram-oauth][callback] fetchProfile başarısız: ${profile.error}`);
+    return channelsRedirect(request, { ig_error: profile.error });
+  }
+  console.info(`[instagram-oauth][callback] fetchProfile tamam: username="${profile.profile.username}" userId="${profile.profile.user_id}"`);
 
   // ⚠ Kullanıcı OTURUMUYLA — `channels`'ın RLS'i (`owns_brand`) burada da
   // geçerli olmalı; `connectWithCredentials`'ın (Bluesky) aynı deseni.
@@ -92,8 +130,10 @@ export async function GET(request: NextRequest): Promise<Response> {
     .single<ChannelRow>();
 
   if (channelError || !channelRow) {
+    console.error(`[instagram-oauth][callback] channels upsert başarısız: ${channelError?.message ?? "kanal satırı dönmedi"}`);
     return channelsRedirect(request, { ig_error: channelError?.message ?? "kanal satırı yazılamadı" });
   }
+  console.info(`[instagram-oauth][callback] channels upsert tamam: channelId=${channelRow.id}`);
 
   // ⚠ Yalnızca service-role — channel_credentials RLS açık + sıfır politika.
   const admin = createAdminClient();
@@ -108,11 +148,13 @@ export async function GET(request: NextRequest): Promise<Response> {
   });
 
   if (credentialError) {
+    console.error(`[instagram-oauth][callback] channel_credentials upsert başarısız: ${credentialError.message}`);
     // Token yazılamadıysa kanal "bağlı" görünmemeli — geri al (Bluesky'nin
     // aynı rollback deseni, `lib/adapters/live/channel.ts`).
     await supabase.from("channels").update({ is_connected: false }).eq("id", channelRow.id);
     return channelsRedirect(request, { ig_error: "kimlik bilgisi kaydedilemedi" });
   }
 
+  console.info(`[instagram-oauth][callback] BAŞARILI: channelId=${channelRow.id} username="${profile.profile.username}"`);
   return channelsRedirect(request, { ig_connected: "1" });
 }

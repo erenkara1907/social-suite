@@ -23,11 +23,14 @@ import { OAUTH_STATE_COOKIE } from "@/lib/core/providers/instagram/config";
  * connect">` — TAM SAYFA YÜKLEMESİ, `fetch`/Server Action DEĞİL.
  */
 export async function GET(request: NextRequest): Promise<Response> {
+  console.info("[instagram-oauth][connect] başladı");
+
   const overrides = await requestModeOverrides();
   const channelPort = port("channel", overrides);
   const result = await channelPort.startConnect("instagram");
 
   if (!result.ok) {
+    console.error(`[instagram-oauth][connect] startConnect başarısız: code="${result.error.code}" detail="${result.error.detail ?? ""}"`);
     const url = new URL("/channels", request.nextUrl.origin);
     url.searchParams.set("ig_error", result.error.detail ?? result.error.code);
     return NextResponse.redirect(url);
@@ -41,6 +44,11 @@ export async function GET(request: NextRequest): Promise<Response> {
     maxAge: 600,
     path: "/",
   });
+
+  // ⚠ Gizli değil: `authorizeUrl` yalnızca client_id/redirect_uri/scope/state
+  // taşıyor (app secret YOK). `state`'in tamamı da tehlikesiz — tek başına
+  // hiçbir şeye erişim vermez, yalnızca CSRF eşleşmesi için var.
+  console.info(`[instagram-oauth][connect] yönlendiriliyor: ${result.data.authorizeUrl}`);
 
   return NextResponse.redirect(result.data.authorizeUrl);
 }
