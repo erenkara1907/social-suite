@@ -32,6 +32,15 @@ import type { ChannelRow } from "@/lib/core/types";
  * Loglara bakmak için: `vercel logs https://app-gold-one-92.vercel.app
  * --since 10m` (terminalden) ya da Vercel Dashboard → proje → **Logs**
  * sekmesi → arama kutusuna `instagram-oauth` yaz.
+ *
+ * ⚠⚠⚠ CANLI TEŞHİS SONUCU (§12 adım 16 FAZ B1) — `exchangeCode`'un Meta'ya
+ * giden isteği, Vercel'in çalışma ortamından tetiklendiğinde (gerçek OAuth
+ * akışından ya da doğrudan bir test çağrısından fark etmiyor) SİSTEMATİK
+ * olarak "redirect_uri is not identical" hatasıyla reddediliyor; AYNI kod
+ * Vercel DIŞINDAN (yerel makine/curl) çağrıldığında HER ZAMAN başarılı.
+ * App ID/Secret/redirect_uri/content-type/`cache:"no-store"` — hepsi tek
+ * tek elendi. Kalan en güçlü açıklama: Meta, Vercel'in paylaşımlı çıkış IP
+ * havuzunu işaretlemiş/kısıtlamış. Detaylar `docs/ADIM_16_17b_RAPOR.md`'de.
  */
 
 const CHANNEL_COLUMNS = "id,platform,handle,followers,growth,engagement,is_connected,last_synced_at";
