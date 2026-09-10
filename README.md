@@ -36,16 +36,21 @@ gevşetmiyor. **Lockfile bir kez oluştuktan sonra** düz `npm install` ve
 
 ### Node sürümü
 
-**Sabitlenen sürüm: Node 22.** İki yerde yazılı:
+**Sabitlenen sürüm: Node 24.** İki yerde yazılı:
 
 | Yer | Değer | Ne yapar |
 |---|---|---|
-| `package.json` → `engines.node` | `>=22.22.2 <23` | `npm` uyumsuz sürümde EBADENGINE uyarır |
-| `.nvmrc` | `22.22.2` | `nvm use` / `fnm use` doğru sürüme geçer |
+| `package.json` → `engines.node` | `>=24.15.0 <25` | `npm` uyumsuz sürümde EBADENGINE uyarır |
+| `.nvmrc` | `24.15.0` | `nvm use` / `fnm use` doğru sürüme geçer |
 
-`next@16.3.3` aslında `^22.22.2 || ^24.15.0 || >=26.0.0` kabul ediyor; biz
-bilerek 22'ye daraltıyoruz — tek bir sürüm hattı, üç ortamda (yerel, CI,
-Vercel) aynı davranış demek.
+`next@16.3.3` `^22.22.2 || ^24.15.0 || >=26.0.0` kabul ediyor; başlangıçta 22'ye
+sabitlenmişti (ADIM_27 B2) — o seçim rastgeleydi, ikisi de eşit derecede
+geçerliydi. §12 adım 16 FAZ B1'de Node 22 ↔ 24 arasında gerçek, gözlemlenmiş
+bir `fetch`/`undici` davranış farkı bulundu: Instagram OAuth kod değişimi
+Node 22'de (Vercel) sistematik olarak başarısız oluyordu, kaynak proje
+siraya'nın (Vercel'in varsayılanı — Node 24) AYNI kodu sorunsuz çalıştırdığı
+kanıtlandı. 24'e geçiş bu yüzden — kanıtlanmış bir üretim hatasını kapatıyor,
+keyfi bir tercih değil (bkz. `docs/ADIM_16_17b_RAPOR.md`).
 
 #### ⚠ `engines` tek başına Vercel'i BAĞLAMAZ
 
@@ -54,15 +59,15 @@ Version), `package.json`'ın `engines` alanından değil. `engines` orada yalnı
 bir doğrulama katmanı: proje ayarı `engines` aralığıyla çelişirse build hata
 verir, ama ayarın kendisini değiştirmez.
 
-**Yapılacak:** Vercel projesi oluşturulduğunda Node.js Version → **22.x**
-seçilmeli. CI (GitHub Actions vb.) tarafında `actions/setup-node` zaten
-`.nvmrc`'yi `node-version-file` ile okuyabilir.
+**Yapılacak:** Vercel projesinde Node.js Version → **24.x** seçilmeli. CI
+(GitHub Actions vb.) tarafında `actions/setup-node` zaten `.nvmrc`'yi
+`node-version-file` ile okuyabilir.
 
 #### Yerel durum
 
-Bu makine şu an **v23.10.0** çalıştırıyor — aralığın dışında. `npm install`
-EBADENGINE uyarısı verir; `build` / `tsc` / `lint` / `test` dördü de çalışır
-(bu oturumda dördü de yeşil ölçüldü). Kalıcı çözüm `nvm install 22.22.2`.
+Bu makine şu an **v23.10.0** çalıştırıyor — aralığın dışında (önceki 22
+aralığında da öyleydi). `npm install` EBADENGINE uyarısı verir; `build` /
+`tsc` / `lint` / `test` dördü de çalışır. Kalıcı çözüm `nvm install 24.15.0`.
 
 ## Komutlar
 
