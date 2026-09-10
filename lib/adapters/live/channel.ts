@@ -9,10 +9,18 @@
  * sorgu GERÇEK ve RLS'ten geçiyor. Adım 16 Instagram OAuth callback'i
  * `channels`'a satır yazmaya başladığında bu ekran DEĞİŞMEDEN onu gösterir.
  *
- * ⭐ 17a FAZ A — `connectWithCredentials`/`disconnect` artık GERÇEK (yalnızca
- * Bluesky için — `CREDENTIAL_CONNECT_PLATFORMS`). `startConnect` hâlâ
- * İSKELET: `/channels`'ın Instagram kartı bu fazda bilerek OAuth'suz kalıyor
- * ("sahte OAuth akışı kurma"), gövdesi adım 16/17b'nin işi.
+ * ⭐ 17a FAZ A — `connectWithCredentials`/`disconnect` GERÇEK (yalnızca
+ * Bluesky için — `CREDENTIAL_CONNECT_PLATFORMS`).
+ *
+ * ⭐ §12 adım 16 FAZ B1 — `startConnect` artık GERÇEK (yalnızca Instagram
+ * için — `OAUTH_CONNECT_PLATFORMS`). Yalnızca `{ authorizeUrl, state }`
+ * ÜRETİR — `state`'i bir çereze yazmak (`app/api/instagram/connect/
+ * route.ts` — BİLEREK bir Route Handler, server action DEĞİL, bkz. o
+ * dosyanın başlığı) ve callback'te doğrulamak (`app/api/instagram/
+ * callback/route.ts`) bu fonksiyonun DIŞINDA, çünkü bu dosya `next/
+ * headers`'a bağımlı değil (§8.6'nın "Next'e bağımlılık yok" kuralı
+ * `lib/adapters/live/*` için de geçerli — yalnızca Supabase'e bağımlı
+ * olabilir, cookie/request nesnesine değil).
  *
  * ⚠ Bu dosyada `process.env` OKUNMAZ. Bluesky kimlik bilgisi (identifier +
  * uygulama şifresi) kullanıcıdan FORM ile gelir, `connectWithCredentials`'a
@@ -26,15 +34,20 @@
  * istemcisiyle olur (`lib/supabase/admin.ts`'in "üç yer" kuralının 2.
  * maddesi — OAuth callback'i VE kimlik-bilgisi-bağlama akışı).
  */
+import { randomBytes } from "node:crypto";
 import type { ChannelPort } from "@/lib/adapters/ports";
-import { CREDENTIAL_CONNECT_PLATFORMS } from "@/lib/core/publishing";
+import { CREDENTIAL_CONNECT_PLATFORMS, OAUTH_CONNECT_PLATFORMS } from "@/lib/core/publishing";
 import { connectBluesky, revokeBlueskySession, verifyBlueskySession } from "@/lib/core/providers/bluesky";
+import { authorizeUrl } from "@/lib/core/providers/instagram/oauth";
+import { resolveInstagramConfig } from "@/lib/server/instagram/resolve-config";
 import { requireBrand } from "@/lib/server/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { ChannelRow, Platform } from "@/lib/core/types";
 
-const NOT_IMPLEMENTED = "not implemented";
+/** CSRF state — `authorizeUrl()`'e giden ve callback'in doğrulayacağı dize.
+ *  32 bayt (256 bit) rastgelelik; tahmin edilebilirlik burada tek risk. */
+const OAUTH_STATE_BYTES = 32;
 
 const CHANNEL_COLUMNS = "id,platform,handle,followers,growth,engagement,is_connected,last_synced_at";
 
@@ -56,8 +69,25 @@ export const liveChannel: ChannelPort = {
     if (error) throw new Error(`channels listelenemedi: ${error.message}`);
     return data ?? [];
   },
-  async startConnect() {
-    throw new Error(NOT_IMPLEMENTED);
+  async startConnect(platform) {
+    if (!(OAUTH_CONNECT_PLATFORMS as readonly Platform[]).includes(platform)) {
+      return { ok: false, error: { code: "invalid_input", detail: `${platform} yönlendirmeli bağlanmayı desteklemiyor` } };
+    }
+
+    const { brand } = await requireBrand();
+    const resolved = await resolveInstagramConfig(brand.id);
+    if (!resolved.ok) {
+      return { ok: false, error: { code: "invalid_key", detail: resolved.error } };
+    }
+
+    // Çağıran (`app/api/instagram/connect/route.ts` — düz bir Route Handler,
+    // BİLEREK bir server action DEĞİL, bkz. o dosyanın başlığı) bunu httpOnly
+    // bir çereze yazar, callback aynı adı okuyup karşılaştırır — bu fonksiyon
+    // çerez YAZMAZ, `next/headers`'a bağımlı değil (ChannelPort'un diğer
+    // implementasyonlarıyla — demo — aynı imza, test edilebilirlik).
+    const state = randomBytes(OAUTH_STATE_BYTES).toString("hex");
+
+    return { ok: true, data: { authorizeUrl: authorizeUrl(resolved.config, state), state } };
   },
   async connectWithCredentials(platform, credentials) {
     if (!(CREDENTIAL_CONNECT_PLATFORMS as readonly Platform[]).includes(platform)) {

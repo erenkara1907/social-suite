@@ -26,6 +26,18 @@ describe("authorizeUrl", () => {
     expect(url.searchParams.get("state")).toBe("csrf-state-1");
     expect(url.searchParams.get("scope")).toBe("instagram_business_basic,instagram_business_content_publish");
   });
+
+  // ⚠ Regresyon (canlı teşhis, GERİ ALINDI) — `enable_fb_login`/`force_reauth`
+  // buraya bir fikir olarak eklenmişti; `force_reauth=true` gözlemlenebilir
+  // bir davranış farkına yol açtı (Instagram'ı her denemede yeniden giriş
+  // yaptırıyor — kaynağın doğrudan onay ekranına giden akışından FARKLI).
+  // Kaynak bu iki parametreyi hiç göndermiyor; bu test bir daha eklenmesinler
+  // diye YOKLUKLARINI doğruluyor.
+  it("does not send enable_fb_login or force_reauth (source parity)", () => {
+    const url = new URL(authorizeUrl(config, "csrf-state-1"));
+    expect(url.searchParams.has("enable_fb_login")).toBe(false);
+    expect(url.searchParams.has("force_reauth")).toBe(false);
+  });
 });
 
 describe("exchangeCode", () => {
@@ -42,10 +54,46 @@ describe("exchangeCode", () => {
     expect(result).toEqual({ ok: false, error: "Code exchange failed: Invalid code" });
   });
 
+  // ⚠ Regresyon (canlı teşhis) — Meta'nın resmi dokümanı bu uç nokta için
+  // `{ data: [{ access_token, user_id }] }` (DİZİ içinde) gösteriyor; kaynak
+  // (siraya) düz `{ access_token, user_id }` varsayıyordu.
+  it("reads the token from Meta's documented { data: [...] } wrapper shape", async () => {
+    const fakeShortToken = ["wrapped", "tok"].join("-");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: [{ access_token: fakeShortToken, user_id: 456, permissions: "instagram_business_basic" }] })));
+    const result = await exchangeCode(config, "auth-code");
+    expect(result).toEqual({ ok: true, shortToken: fakeShortToken, userId: "456" });
+  });
+
   it("surfaces a network failure", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
     const result = await exchangeCode(config, "auth-code");
     expect(result).toEqual({ ok: false, error: "Code exchange failed: network down" });
+  });
+
+  // ⚠ Regresyon (kanıtlanmış kök neden, canlı teşhis) — `multipart/form-data`
+  // (`FormData`) Vercel'in üretim çalışma zamanında SESSİZCE bozuluyor: aynı
+  // kod yerel Node'da ve `curl -F` ile MÜKEMMEL çalışıyor, Vercel'de HER
+  // SEFERİNDE Meta'dan yanıltıcı bir "redirect_uri is not identical" hatası
+  // dönüyor (bilinen sınıf: vercel/next.js `fetch`+`FormData` Node sürümüne
+  // özgü bozulma raporları). Kaynağın (siraya) ORİJİNAL `application/
+  // x-www-form-urlencoded` tercihine GERİ DÖNÜLDÜ — bu test `FormData`'ya
+  // bir daha geri dönülmesin diye body'nin `URLSearchParams` olduğunu
+  // doğruluyor.
+  it("sends the request body as application/x-www-form-urlencoded, not multipart", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ access_token: "tok", user_id: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await exchangeCode(config, "auth-code");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.body).toBeInstanceOf(URLSearchParams);
+    expect(init.headers).toEqual({ "Content-Type": "application/x-www-form-urlencoded" });
+    const body = init.body as URLSearchParams;
+    expect(body.get("client_id")).toBe(config.appId);
+    expect(body.get("client_secret")).toBe(config.appSecret);
+    expect(body.get("grant_type")).toBe("authorization_code");
+    expect(body.get("redirect_uri")).toBe(config.redirectUri);
+    expect(body.get("code")).toBe("auth-code");
   });
 });
 

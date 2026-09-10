@@ -78,7 +78,17 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
+  // ⭐ §12 adım 16 FAZ B1 CANLI BULGU — `api/` bu matcher'a DAHİLDİ (yalnızca
+  // statikler hariçti). `/api/cron/*` (CRON_SECRET) ve `/api/instagram/
+  // callback` (kendi state/requireBrand() kontrolü) zaten kendi auth'unu
+  // yapıyor ve ikisi de PROTECTED_ROUTES/AUTH_ROUTES dışında olduğu için
+  // proxy hiçbir zaman redirect ÜRETMİYORDU — yalnızca her istekte gereksiz
+  // bir `supabase.auth.getUser()` çağrısı ekliyordu. OAuth callback'inde bu,
+  // tek kullanımlık `code`'un exchange'e ulaşmadan önce harcadığı süreyi
+  // BÜYÜTÜYOR (route handler'ın kendi `requireBrand()`'ı zaten AYRI bir
+  // `getUser()` çağrısı yapıyor — iki kat gecikme). Zararsız ama amaçsızdı;
+  // `api/` hariç tutuldu.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|mp3|ico)$).*)",
+    "/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|mp3|ico)$).*)",
   ],
 };

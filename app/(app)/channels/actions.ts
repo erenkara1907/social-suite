@@ -63,3 +63,17 @@ export async function disconnectChannelAction(
   revalidatePath("/channels");
   return { status: "disconnected", channelId };
 }
+
+/**
+ * ⚠ Instagram'ın yönlendirmeli bağlanma başlangıcı BİLEREK BURADA DEĞİL —
+ * bir server action OLARAK YAŞAMIYOR. Kanıtlanmış kök neden (§12 adım 16
+ * FAZ B1, canlı teşhis): server action'ın `redirect()`'i (`next/navigation`)
+ * GERÇEK bir HTTP 3xx üretmiyor, Next'in Server Action protokolü üzerinden
+ * İSTEMCİ TARAFINDA yorumlanan bir yönlendirme — bu, Meta'nın "redirect_uri
+ * is not identical" hatasına (yanıltıcı metin) yol açan zincirin parçasıydı.
+ * Düz bir Route Handler'a taşındı: `app/api/instagram/connect/route.ts`
+ * (`NextResponse.redirect()`, GERÇEK bir HTTP 3xx) — kaynağın (siraya)
+ * kanıtlanmış deseni. `channels-view.tsx`'teki düğme artık bir `<a
+ * href="/api/instagram/connect">` (tam sayfa navigasyonu), bu dosyayı hiç
+ * çağırmıyor.
+ */

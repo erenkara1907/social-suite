@@ -295,6 +295,11 @@ export const ui = {
     channelsConnecting: "Bağlanıyor…",
     channelsDisconnectCta: "Bağlantıyı kes",
     channelsDisconnecting: "Kesiliyor…",
+    // ── §12 adım 16 FAZ B1: Instagram OAuth (yönlendirmeli bağlanma) ─────
+    channelsConnectOAuthCta: "Instagram ile bağlan",
+    channelsConnectOAuthHint: "Meta İş Hesabı + Instagram Profesyonel hesabı gerekir. Onaya tıklayınca Instagram'a yönlendirilirsin.",
+    channelsOAuthErrorBanner: "Bağlanamadı",
+    channelsOAuthConnectedBanner: "Instagram bağlandı.",
     // ── 11b FAZ B: /library ─────────────────────────────────────────────
     libraryTitle: "Kütüphane",
     libraryHint: "Üretilen ve yüklenen tüm medya — yalnızca bu markaya ait.",
@@ -607,6 +612,11 @@ export const ui = {
     channelsConnecting: "Connecting…",
     channelsDisconnectCta: "Disconnect",
     channelsDisconnecting: "Disconnecting…",
+    // ── §12 step 16 FAZ B1: Instagram OAuth (redirect-based connect) ─────
+    channelsConnectOAuthCta: "Connect with Instagram",
+    channelsConnectOAuthHint: "Requires a Meta Business account + an Instagram Professional account. You'll be redirected to Instagram to approve.",
+    channelsOAuthErrorBanner: "Couldn't connect",
+    channelsOAuthConnectedBanner: "Instagram connected.",
     // ── 11b FAZ B: /library ─────────────────────────────────────────────
     libraryTitle: "Library",
     libraryHint: "Every generated and uploaded media file — this brand's only.",

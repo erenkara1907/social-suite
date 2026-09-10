@@ -61,3 +61,13 @@ export const SCOPES = ["instagram_business_basic", "instagram_business_content_p
  */
 export const TOKEN_TTL_DAYS = 60;
 export const REFRESH_WHEN_DAYS_LEFT = 10;
+
+/**
+ * ⭐ §12 adım 16 FAZ B1 — kaynakta YOKTU (siraya'nın `startConnect` akışı
+ * hiç yazılmamıştı, `lib/adapters/ports.ts`'in `ChannelPort` yorumu:
+ * "o kol bugüne kadar hiç çalıştırılmadı"). `startConnectAction` bu adı
+ * kullanarak `state`'i httpOnly bir çereze yazar; callback rotası (`app/api/
+ * instagram/callback/route.ts`) AYNI adı okuyup karşılaştırır — tek kaynak,
+ * iki taraf birbirinden bağımsız bir dize İCAT ETMESİN diye burada.
+ */
+export const OAUTH_STATE_COOKIE = "ig_oauth_state";

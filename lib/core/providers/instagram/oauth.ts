@@ -53,6 +53,14 @@ async function readJson(response: Response, context: string): Promise<{ ok: true
 
 /** Step 1 — where we send the user to grant access. */
 export function authorizeUrl(config: InstagramConfig, state: string): string {
+  // ⚠ CANLI BULGU (§12 adım 16 FAZ B1) — `enable_fb_login=false` ve
+  // `force_reauth=true` BURADA DENENDİ (Meta dokümanının "enable_fb_login
+  // varsayılanı true" notuna dayanarak) ve GERİ ALINDI: `force_reauth=true`
+  // her denemede Instagram'ı YENİDEN GİRİŞ yaptırmaya zorluyor — kaynağın
+  // (siraya, hâlâ çalışan) akışı doğrudan onay ekranına gidiyor (kullanıcının
+  // tarayıcısındaki mevcut Instagram oturumunu kullanıyor), bizimki önce bir
+  // giriş ekranı gösteriyordu — GÖZLEMLENEN, ölçülebilir bir davranış farkı.
+  // Kaynak BU İKİ PARAMETREYİ HİÇ GÖNDERMİYOR; buraya birebir dönüldü.
   const params = new URLSearchParams({
     client_id: config.appId,
     redirect_uri: config.redirectUri,
@@ -71,6 +79,24 @@ export async function exchangeCode(config: InstagramConfig, code: string): Promi
   try {
     response = await fetch(OAUTH_TOKEN_URL, {
       method: "POST",
+      // ⚠ KANITLANMIŞ KÖK NEDEN (§12 adım 16 FAZ B1, canlı teşhis) —
+      // `multipart/form-data` (`FormData`, Meta'nın dokümanındaki `-F`
+      // örneğine sadık kalmak için denendi) Vercel'in üretim çalışma
+      // zamanında SESSİZCE bozuluyor: AYNI kod, AYNI parametrelerle yerel
+      // Node'da (`fetch`+`FormData`) ve `curl -F` ile MÜKEMMEL çalışıyor,
+      // ama Vercel'de deploy edilince HER SEFERİNDE Meta'dan "redirect_uri
+      // is not identical" (yanıltıcı — gerçek sebep bu değil) hatası
+      // dönüyor. Bilinen sınıf: vercel/next.js repo'sunda `fetch`+`FormData`
+      // için Node sürümüne özgü, yalnızca üretimde ortaya çıkan bozulma
+      // raporları var (örn. github.com/vercel/next.js/issues/52616 ve
+      // ilişkili tartışmalar). Kaynağın (siraya) ORİJİNAL tercihi
+      // `application/x-www-form-urlencoded` (`URLSearchParams`) — bu daha
+      // basit serileştirme (boundary yok) o hata sınıfına hiç girmiyor;
+      // buraya GERİ DÖNÜLDÜ. Content-type'ın kendisinin Meta tarafında
+      // fark etmediği ayrıca `curl` ile doğrulandı (bkz. `docs/
+      // ADIM_16_17b_RAPOR.md`) — sorun HİÇBİR ZAMAN content-type'ın Meta
+      // tarafında nasıl yorumlandığı değildi, Vercel'in gövdeyi Meta'ya
+      // ULAŞTIRMADAN ÖNCE bozmasıydı.
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: config.appId,
@@ -79,6 +105,16 @@ export async function exchangeCode(config: InstagramConfig, code: string): Promi
         redirect_uri: config.redirectUri,
         code,
       }),
+      // ⚠ CANLI BULGU (§12 adım 16 FAZ B1) — Next.js App Router, sunucu
+      // tarafındaki `fetch()`'i KENDİ Veri Önbelleği'yle otomatik yamalıyor;
+      // varsayılan anahtar URL'e dayanır, GÖVDEYE değil. Bu uç noktanın URL'i
+      // HER DENEMEDE AYNI (`api.instagram.com/oauth/access_token`) ama `code`
+      // her seferinde FARKLI — Next bunu "aynı kaynak" sanıp eski bir
+      // denemenin (başarısız) yanıtını önbellekten sunuyor olabilir, kod
+      // ne kadar doğru olursa olsun Meta'ya HİÇ gitmeden. `cache: "no-store"`
+      // bu katmanı devre dışı bırakır — düz Node'un (yerel test, hep
+      // başarılı) zaten hiç sahip olmadığı bir davranış.
+      cache: "no-store",
     });
   } catch (error) {
     return { ok: false, error: `Code exchange failed: ${errorMessage(error)}` };
@@ -87,8 +123,16 @@ export async function exchangeCode(config: InstagramConfig, code: string): Promi
   const parsed = await readJson(response, "Code exchange failed");
   if (!parsed.ok) return parsed;
 
-  const shortToken = parsed.body.access_token as string | undefined;
-  const userId = parsed.body.user_id;
+  // ⚠ CANLI BULGU — kaynak (siraya) düz `{ access_token, user_id }` şekli
+  // varsayıyordu. Meta'nın resmi dokümanı bu uç nokta için `{ data: [{
+  // access_token, user_id, permissions }] }` (DİZİ içinde) gösteriyor. İkisi
+  // de destekleniyor — hangisinin gerçekten döndüğü sürüm/hesap tipine göre
+  // değişebilir, tek bir şekle bahse girmek yerine ikisi de okunuyor.
+  const wrapped = (parsed.body.data as Record<string, unknown>[] | undefined)?.[0];
+  const source = wrapped ?? parsed.body;
+
+  const shortToken = source.access_token as string | undefined;
+  const userId = source.user_id;
 
   if (!shortToken) return { ok: false, error: "Code exchange failed: no access_token in the response." };
   return { ok: true, shortToken, userId: String(userId ?? "") };
@@ -121,7 +165,7 @@ export async function exchangeForLongLived(config: InstagramConfig, shortToken: 
 
   let response: Response;
   try {
-    response = await fetch(`${LONG_LIVED_URL}?${params}`);
+    response = await fetch(`${LONG_LIVED_URL}?${params}`, { cache: "no-store" });
   } catch (error) {
     return { ok: false, error: `Long-lived token exchange failed: ${errorMessage(error)}` };
   }
@@ -137,7 +181,7 @@ export async function refreshLongLived(config: InstagramConfig, token: string): 
 
   let response: Response;
   try {
-    response = await fetch(`${REFRESH_URL}?${params}`);
+    response = await fetch(`${REFRESH_URL}?${params}`, { cache: "no-store" });
   } catch (error) {
     return { ok: false, error: `Token refresh failed: ${errorMessage(error)}` };
   }
@@ -158,7 +202,7 @@ export async function fetchProfile(config: InstagramConfig, accessToken: string)
 
   let response: Response;
   try {
-    response = await fetch(`${graphHost(config)}/me?${params}`);
+    response = await fetch(`${graphHost(config)}/me?${params}`, { cache: "no-store" });
   } catch (error) {
     return { ok: false, error: `Profile lookup failed: ${errorMessage(error)}` };
   }

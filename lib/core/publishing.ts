@@ -39,6 +39,23 @@ export function canPublish(platform: Platform): boolean {
 export const CREDENTIAL_CONNECT_PLATFORMS: Platform[] = ["bluesky"];
 
 /**
+ * ⭐ §12 adım 16 FAZ B1 — `ChannelPort`'un `startConnect`/`ConnectHandoff`
+ * kolu (yönlendirmeli OAuth) hangi platformlarda GERÇEKTEN devrede. Bugüne
+ * kadar bu kol hiç implemente edilmemişti (bkz. `lib/adapters/live/
+ * channel.ts`'in eski "NOT_IMPLEMENTED" stub'ı) — bu liste, `/channels`'ın
+ * bir platform için "OAuth ile bağlan" düğmesi mi yoksa "yakında" metni mi
+ * göstereceğine karar verir. `CREDENTIAL_CONNECT_PLATFORMS`'un TAMLAYICISI
+ * DEĞİL: ileride hiçbir bağlanma yolu olmayan bir platform (örn. tiktok,
+ * henüz planlanmadı) ikisinde de yer almaz.
+ *
+ * ⚠ `PUBLISHABLE_PLATFORMS`'tan BAĞIMSIZ bir soru — "bağlanabilir mi" ile
+ * "bugün gerçekten yayınlanabilir mi" farklı sorular (bkz. o listenin
+ * yorumu). Instagram burada FAZ B ile giriyor; `PUBLISHABLE_PLATFORMS`'a
+ * girişi FAZ C'nin işi (yayın adaptörü hazır olunca).
+ */
+export const OAUTH_CONNECT_PLATFORMS: Platform[] = ["instagram"];
+
+/**
  * ⭐ adım 18 — hangi platformlar `content_metrics.reach`'i GERÇEKTEN
  * doldurabiliyor. `docs/ADIM_18_RAPOR.md` §A1: AT Protocol'ün gönderi
  * metriği (`app.bsky.feed.getPosts` → `PostView.likeCount/replyCount/

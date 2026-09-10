@@ -37,7 +37,11 @@ type CallResult = { ok: true; body: Record<string, unknown> } | { ok: false; err
 async function call(url: string, init: RequestInit, context: string): Promise<CallResult> {
   let response: Response;
   try {
-    response = await fetch(url, init);
+    // ⚠ §12 adım 16 FAZ B1 canlı bulgusu (`./oauth.ts`) — Next.js'in sunucu
+    // `fetch()` Veri Önbelleği URL bazlı anahtarlanıyor; `containerId`/token
+    // gibi gövde/parametre farkları önbellek anahtarına GİRMEYEBİLİR.
+    // `cache: "no-store"` her çağrıyı gerçekten ağa gönderir.
+    response = await fetch(url, { ...init, cache: "no-store" });
   } catch (error) {
     return { ok: false, error: `${context}: ${errorMessage(error)}` };
   }

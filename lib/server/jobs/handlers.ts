@@ -21,6 +21,8 @@ import { runAnthropicCall } from "@/lib/server/ai/run-provider-call";
 import { runUgcPipelineStep } from "@/lib/server/media/pipeline";
 import { pollMediaJob } from "@/lib/server/media/poll";
 import { collectContentMetrics } from "@/lib/server/metrics/collect";
+import { resolveInstagramConfig } from "@/lib/server/instagram/resolve-config";
+import { usableInstagramToken } from "@/lib/server/instagram/tokens";
 
 /**
  * İşleyici kaydı — BIRLESIM_PLANI §12 adım 14 FAZ C.
@@ -369,8 +371,53 @@ export const JOB_HANDLERS: {
     const admin = createAdminClient();
     await collectContentMetrics(admin, payload.contentItemId);
   },
-  async token_refresh() {
-    throw new PermanentJobError(NOT_IMPLEMENTED);
+  /**
+   * ⭐ §12 adım 16 FAZ B3 — `app/api/cron/tokens/route.ts` (`sm-token-refresh`)
+   * yenilenmesi gereken her Instagram kanalı için `channelId`'li bir iş açar
+   * (`handlePublish`'in DRY deseniyle aynı: rota tarar/kuyruğa koyar, işleyici
+   * yapar). Asıl mantık `lib/server/instagram/tokens.ts`'in `usableInstagramToken`'ı —
+   * bu, `lib/server/publish/publish-item.ts`'in Instagram dalının yayından
+   * önce çağırdığı AYNI fonksiyon (DRY, iki çağıran tek gerçek kaynak).
+   *
+   * ⚠ Yenileme başarısız VE token gerçekten SÜRESİ DOLMUŞSA kanal
+   * `is_connected:false`'a düşer ("bağlantı koptu" — kullanıcı yeniden
+   * bağlanmalı). Geçici bir hata (örn. Meta API kesintisi) kanalı
+   * KESMEZ — `PermanentJobError` fırlatılır ama `is_connected` dokunulmaz,
+   * `JOB_RETRY_POLICY.token_refresh`'in kendi deneme hakkı (maxAttempts:2)
+   * bir sonraki cron turuna kadar zaten tazeler.
+   */
+  async token_refresh(payload) {
+    if (!payload.channelId) throw new PermanentJobError("token_refresh: channelId zorunlu (bu adımda brand-geneli tarama yok)");
+    const admin = createAdminClient();
+
+    const { data: channel, error: channelError } = await admin
+      .from("channels")
+      .select("id,brand_id,platform,is_connected")
+      .eq("id", payload.channelId)
+      .maybeSingle<{ id: string; brand_id: string; platform: string; is_connected: boolean }>();
+    if (channelError) throw new TransientJobError(`channels okunamadı: ${channelError.message}`);
+    if (!channel) throw new PermanentJobError("token_refresh: kanal bulunamadı");
+    if (channel.platform !== "instagram") throw new PermanentJobError(`token_refresh: desteklenmeyen platform (${channel.platform})`);
+    if (!channel.is_connected) return; // zaten bağlı değil — iş anlamsız, hata DEĞİL.
+
+    const { data: cred, error: credError } = await admin
+      .from("channel_credentials")
+      .select("channel_id,access_token,token_expires_at")
+      .eq("channel_id", channel.id)
+      .maybeSingle<{ channel_id: string; access_token: string; token_expires_at: string | null }>();
+    if (credError) throw new TransientJobError(`channel_credentials okunamadı: ${credError.message}`);
+    if (!cred) throw new PermanentJobError("token_refresh: kimlik bilgisi yok");
+
+    const resolved = await resolveInstagramConfig(channel.brand_id);
+    if (!resolved.ok) throw new PermanentJobError(`token_refresh: ${resolved.error}`);
+
+    const result = await usableInstagramToken(admin, resolved.config, cred);
+    if (!result.ok) {
+      if (result.expired) {
+        await admin.from("channels").update({ is_connected: false }).eq("id", channel.id);
+      }
+      throw new PermanentJobError(`token_refresh: ${result.error}`);
+    }
   },
   async embed_backfill() {
     throw new PermanentJobError(NOT_IMPLEMENTED);

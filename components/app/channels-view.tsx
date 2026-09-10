@@ -9,7 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input, Label } from "@/components/ui/input";
 import { AI_ERROR_COPY } from "@/lib/core/ai/error-copy";
 import { PLATFORM_META, PLATFORMS, type ChannelAccount, type Platform } from "@/lib/core/types";
-import { CREDENTIAL_CONNECT_PLATFORMS, PUBLISHABLE_PLATFORMS } from "@/lib/core/publishing";
+import { CREDENTIAL_CONNECT_PLATFORMS, OAUTH_CONNECT_PLATFORMS, PUBLISHABLE_PLATFORMS } from "@/lib/core/publishing";
 import {
   connectChannelAction, disconnectChannelAction,
   type ConnectChannelActionState, type DisconnectChannelActionState,
@@ -43,9 +43,13 @@ export interface ChannelCardView {
  */
 function requirementText(platform: Platform, isPublishable: boolean): { tr: string; en: string } {
   if (platform === "instagram") {
+    // ⭐ §12 adım 16 FAZ B1 — "henüz devrede değil" metni kalktı: OAuth artık
+    // GERÇEK. Bu metin bugün yalnızca bir kanal zaten bağlıyken (`card.account`
+    // dolu) render EDİLMEZ; `ConnectOAuthButton`'ın altındaki ipucu ayrı bir
+    // anahtar (`channelsConnectOAuthHint`) — kart görünümü ikiye ayrıldığı için.
     return {
-      tr: "Meta İş Hesabı + Instagram Profesyonel hesabı gerekir. Bağlama OAuth akışıyla olacak — henüz devrede değil.",
-      en: "Requires a Meta Business account + an Instagram Professional account. Connecting will use an OAuth flow — not live yet.",
+      tr: "Meta İş Hesabı + Instagram Profesyonel hesabı gerekir.",
+      en: "Requires a Meta Business account + an Instagram Professional account.",
     };
   }
   if (isPublishable) {
@@ -108,6 +112,40 @@ function ConnectCredentialsForm({ platform }: { platform: Platform }) {
   );
 }
 
+/**
+ * ⭐ §12 adım 16 FAZ B1 — Instagram gibi yönlendirmeli platformlar için gerçek
+ * bağlanma düğmesi.
+ *
+ * ⚠ KANITLANMIŞ KÖK NEDEN (canlı teşhis) — burası ÖNCE bir Server Action
+ * (`startInstagramConnectAction` + `next/navigation`'ın `redirect()`'i) idi.
+ * Server Action'ın `redirect()`'i GERÇEK bir HTTP 3xx ÜRETMİYOR — Next'in
+ * Server Action protokolü üzerinden İSTEMCİ TARAFINDA yorumlanan bir
+ * yönlendirme. Bu, canlıda Meta'nın "redirect_uri is not identical"
+ * hatasına (yanıltıcı metin — gerçek sebep bu değildi) yol açan
+ * zincirin bir parçasıydı. Kaynak (siraya, `components/app/
+ * channels-client.tsx`) düz bir `<a href="/api/instagram/connect">` kullanıyor
+ * — kendi yorumu: "A full page load, not a fetch: this hands the browser to
+ * Instagram." Buraya BİREBİR dönüldü: düğme artık bir `<a>`, `/api/instagram/
+ * connect`'e (düz Route Handler, `NextResponse.redirect()`) GERÇEK bir tam
+ * sayfa navigasyonu yapıyor.
+ */
+function ConnectOAuthButton() {
+  const { ui } = useLang();
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">{ui.channelsConnectOAuthHint}</p>
+      <a
+        href="/api/instagram/connect"
+        className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground transition-all duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <Icon name="link-2" className="h-3.5 w-3.5" />
+        {ui.channelsConnectOAuthCta}
+      </a>
+    </div>
+  );
+}
+
 function DisconnectButton({ channelId }: { channelId: string }) {
   const { ui } = useLang();
   const [state, formAction, pending] = useActionState(disconnectChannelAction, DISCONNECT_CHANNEL_INITIAL_STATE);
@@ -131,6 +169,7 @@ function ChannelCard({ card }: { card: ChannelCardView }) {
   const meta = PLATFORM_META[card.platform];
   const isPublishable = (PUBLISHABLE_PLATFORMS as readonly Platform[]).includes(card.platform);
   const isCredentialConnect = (CREDENTIAL_CONNECT_PLATFORMS as readonly Platform[]).includes(card.platform);
+  const isOAuthConnect = (OAUTH_CONNECT_PLATFORMS as readonly Platform[]).includes(card.platform);
   const connected = card.account?.connected ?? false;
 
   return (
@@ -177,6 +216,8 @@ function ChannelCard({ card }: { card: ChannelCardView }) {
           </>
         ) : isCredentialConnect ? (
           <ConnectCredentialsForm platform={card.platform} />
+        ) : isOAuthConnect ? (
+          <ConnectOAuthButton />
         ) : (
           <p className="text-sm text-muted-foreground">{requirementText(card.platform, isPublishable)[lang]}</p>
         )}
@@ -188,7 +229,7 @@ function ChannelCard({ card }: { card: ChannelCardView }) {
         </div>
       )}
 
-      {!connected && !isCredentialConnect && (
+      {!connected && !isCredentialConnect && !isOAuthConnect && (
         <div className="border-t border-border p-3">
           <Button
             type="button"
@@ -207,7 +248,21 @@ function ChannelCard({ card }: { card: ChannelCardView }) {
   );
 }
 
-export function ChannelsView({ cards, isDemo }: { cards: ChannelCardView[]; isDemo: boolean }) {
+/**
+ * ⭐ §12 adım 16 FAZ B1 — `oauthError`/`oauthConnected` `redirect()`'in
+ * taşıdığı sonucu gösteriyor (bkz. `app/(app)/channels/page.tsx` başlığı:
+ * Server Component'in kendi state'i yok, tek kanal URL). `oauthError`
+ * ÇAĞIRANDAN (route/action) gelen zaten kullanıcıya gösterilmeye uygun bir
+ * metin — burada ekrana basılıyor, ikinci bir çeviri/yorumlama YOK.
+ */
+export function ChannelsView({
+  cards, isDemo, oauthError = null, oauthConnected = false,
+}: {
+  cards: ChannelCardView[];
+  isDemo: boolean;
+  oauthError?: string | null;
+  oauthConnected?: boolean;
+}) {
   const { ui } = useLang();
 
   // Görünüm sırası PLATFORMS'un kanonik sırası — kartlar sayfadan sayfaya
@@ -222,6 +277,17 @@ export function ChannelsView({ cards, isDemo }: { cards: ChannelCardView[]; isDe
           {isDemo ? ui.channelsHintDemo : ui.channelsHint}
         </p>
       </div>
+
+      {oauthError && (
+        <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {ui.channelsOAuthErrorBanner}: {oauthError}
+        </p>
+      )}
+      {oauthConnected && (
+        <p role="status" className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">
+          {ui.channelsOAuthConnectedBanner}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {ordered.map((card) => (
