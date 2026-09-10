@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { requireBrand } from "@/lib/server/auth";
@@ -94,10 +95,14 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
   const config = resolved.config;
   // ⚠ Gizli değil: appId ve redirect_uri Meta panelinde zaten açık.
-  // app_secret'ın KENDİSİ loglanmıyor, yalnızca dolu olup olmadığı.
+  // app_secret'ın KENDİSİ loglanmıyor — yalnızca uzunluğu ve tek yönlü
+  // SHA256 hash'i (Vercel'deki değerin .env.local ile BİREBİR aynı olup
+  // olmadığını, secret'ı hiç ifşa etmeden doğrulamak için).
+  const secretHash = createHash("sha256").update(config.appSecret).digest("hex");
   console.info(
     `[instagram-oauth][callback] resolveInstagramConfig tamam: appId="${config.appId}" ` +
-    `redirect_uri="${config.redirectUri}" apiVersion="${config.apiVersion}" hasSecret=${!!config.appSecret}`,
+    `redirect_uri="${config.redirectUri}" apiVersion="${config.apiVersion}" ` +
+    `secretLength=${config.appSecret.length} secretSha256=${secretHash}`,
   );
 
   const exchanged = await exchangeCode(config, code);
